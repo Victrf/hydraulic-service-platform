@@ -1,0 +1,401 @@
+# Hydraulic Service Platform — Backend Functionality Document
+
+---
+
+## 1. System Overview
+
+This system is a **multi-tenant SaaS platform** designed to manage:
+
+* Equipment maintenance
+* Service requests
+* Technician workflows
+* Subscription-based preventive maintenance
+* Payments and automation
+
+The system is **role-based**, **event-driven**, and **subscription-controlled**.
+
+---
+
+## 2. Core Architecture
+
+### 2.1 Roles
+
+* **Admin**
+* **Company User**
+* **Technician**
+
+---
+
+### 2.2 Key Principles
+
+* Company-level data isolation
+* Role-based access control (RBAC)
+* Event-driven notifications
+* Automated workflows (cron jobs)
+* Subscription-driven service generation
+
+---
+
+## 3. Authentication & Authorization
+
+### Features
+
+* JWT-based authentication
+* Role-based guards
+* Protected routes
+
+### Roles
+
+| Role       | Access Level             |
+| ---------- | ------------------------ |
+| Admin      | Full system control      |
+| User       | Company-level operations |
+| Technician | Assigned work only       |
+
+---
+
+## 4. Multi-Tenancy
+
+* Each user belongs to a **company**
+* All data scoped by `companyId`
+* No cross-company data access
+
+---
+
+## 5. User Management
+
+### Admin Capabilities
+
+* Create users
+* Assign roles (admin / technician / user)
+* Assign users to companies
+
+---
+
+## 6. Equipment Management
+
+### Features
+
+* Equipment linked to company
+* Used in service requests
+* Access restricted per company
+
+---
+
+## 7. Service Request System
+
+### Types
+
+* `manual` → created by users
+* `subscription` → auto-generated
+
+---
+
+### Features
+
+* Create request
+* Track status
+* Upload image
+* Assign technician
+* Attach report
+* Event timeline support
+
+---
+
+### Workflow
+
+1. User creates request
+2. Admin assigns technician
+3. Technician works on it
+4. Technician submits report
+
+---
+
+## 8. Technician System
+
+### Features
+
+* View assigned jobs
+* Update job status
+* Submit reports
+
+### Restrictions
+
+* Cannot self-assign jobs
+* Only works on assigned requests
+
+---
+
+## 9. Products System
+
+### Admin
+
+* Create product
+* Edit product
+* Delete product
+
+### Users & Technicians
+
+* View products
+
+---
+
+## 10. Announcements System
+
+### Admin
+
+* Create announcements
+* Edit/delete announcements
+
+### Others
+
+* View announcements
+
+---
+
+## 11. Subscription System
+
+### Plans
+
+* Monthly (1 month)
+* Quarterly (3 months)
+* Biannual (6 months)
+
+---
+
+### Lifecycle
+
+* Create subscription
+* Replace plan (upgrade/downgrade)
+* Prevent duplicate plan
+* Cancel subscription
+* Expire subscription (unpaid)
+
+---
+
+### Data Fields
+
+* `companyId`
+* `planId`
+* `currentPeriodEnd`
+* `nextVisitDate`
+* `status`
+
+---
+
+### Status Types
+
+* active
+* cancelled
+* expired
+
+---
+
+## 12. Payment System
+
+### Features
+
+* Record payments
+* Link payment to:
+
+  * Company
+  * Subscription
+* Store:
+
+  * amount
+  * method
+  * status
+  * timestamp
+
+---
+
+### Behavior
+
+* Payment → renews subscription
+* Updates:
+
+  * `currentPeriodEnd`
+  * `nextVisitDate`
+* Reactivates expired subscriptions
+
+---
+
+### User Capabilities
+
+* Make payment
+* View payment history
+
+---
+
+### Admin Capabilities
+
+* View all payments
+* Monitor revenue
+* See company + plan details
+
+---
+
+## 13. Automation (Cron System)
+
+### Runs
+
+* Daily at midnight
+
+---
+
+### Logic
+
+* Find active subscriptions
+* Check if due for service
+* Check payment validity
+* Expire unpaid subscriptions
+* Generate service requests
+* Prevent duplicates
+* Update next visit date
+
+---
+
+## 14. Notification System
+
+### Structure
+
+* Central `NotificationsService`
+* Event-driven triggers
+
+---
+
+### Events Implemented
+
+* Payment success
+* Subscription expiry
+
+---
+
+### Current Delivery
+
+* Console logs (placeholder)
+
+---
+
+### Future Upgrade
+
+* Email (SendGrid / Nodemailer)
+* SMS (Twilio)
+
+---
+
+## 15. System Flows
+
+---
+
+### 15.1 Manual Request Flow
+
+User → Create Request
+→ Admin assigns technician
+→ Technician completes
+→ Report submitted
+
+---
+
+### 15.2 Subscription Flow
+
+User subscribes
+→ Payment activates subscription
+→ Cron generates requests
+→ Admin assigns technician
+→ Technician executes work
+
+---
+
+### 15.3 Payment Flow
+
+User pays
+→ Payment recorded
+→ Subscription renewed
+→ Notification triggered
+
+---
+
+### 15.4 Expiry Flow
+
+No payment
+→ Subscription expires
+→ Cron stops
+→ Notification triggered
+
+---
+
+### 15.5 Cancellation Flow
+
+User cancels
+→ Subscription becomes inactive
+→ Cron stops immediately
+
+---
+
+## 16. Data Safety & Integrity
+
+* Role-based access control
+* Company-level isolation
+* Duplicate request prevention
+* Safe cron execution (idempotent)
+* Controlled assignment system
+
+---
+
+## 17. System Architecture Flow
+
+Payments
+→ control Subscription
+
+Subscription
+→ controls Cron
+
+Cron
+→ generates Service Requests
+
+Notifications
+→ react to system events
+
+Admin
+→ oversees everything
+
+---
+
+## 18. Not Implemented (Intentional)
+
+* Stripe payment integration
+* Email/SMS providers
+* Analytics dashboards (UI)
+* Cloud storage (S3)
+* Advanced notification queues
+
+---
+
+## 19. System Status
+
+* Backend: **Complete**
+* Business logic: **Complete**
+* Architecture: **Production-ready**
+* Next phase: **Frontend implementation**
+
+---
+
+## 20. Conclusion
+
+This backend represents a **fully functional SaaS core system** with:
+
+* Subscription-based automation
+* Payment-controlled lifecycle
+* Role-based workflows
+* Event-driven architecture
+
+It is ready for **frontend integration and real-world usage**.
+
+---
+
+PLAN  MODULE 
+Monthly PLan
+12 visit  per year 
+
+

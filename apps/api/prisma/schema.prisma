@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  admin
+  technician
+  customer
+}
+
+model User {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+
+  companyId String?  @db.Uuid
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  assignments        ServiceAssignment[]   @relation("TechnicianAssignments")
+  availableEquipment UserEquipmentAccess[]
+  activityLogs ActivityLog[]
+}
+
+model Company {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+
+  logoUrl   String?
+
+  email     String?
+  address   String?
+  phone     String?
+
+  contactName     String?
+  contactEmail    String?
+  contactPhone    String?
+  contactPosition String?
+
+  escalatingName     String?
+  escalatingEmail    String?
+  escalatingPhone    String?
+  escalatingPosition String?
+
+  createdAt DateTime @default(now())
+
+  subscriptions Subscription[]
+
+  users           User[]
+  equipment       Equipment[]
+  serviceRequests ServiceRequest[]
+  payments        Payment[]
+}
+
+model Equipment {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  serialNumber     String    @unique
+  brand            String?
+  model            String?
+  installationDate DateTime?
+  warrantyExpiry   DateTime?
+
+  companyId String  @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  serviceRequests ServiceRequest[]
+  assignedUsers   UserEquipmentAccess[]
+}
+
+model UserEquipmentAccess {
+  userId      String   @db.Uuid
+  equipmentId String   @db.Uuid
+  assignedAt  DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@id([userId, equipmentId])
+  @@index([equipmentId])
+}
+
+model ServiceRequest {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  description String
+  status      String   @default("pending")
+  location    String?
+  createdAt   DateTime @default(now())
+  type        String   @default("manual")
+
+  // ✅ NEW (soft delete / hide)
+  isHiddenByUser Boolean  @default(false)
+  hiddenAt       DateTime?
+
+  companyId String  @db.Uuid
+  company   Company @relation(fields: [companyId], references: [id])
+
+  equipmentId String    @db.Uuid
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+
+  assignment ServiceAssignment?
+  report     ServiceReport?
+
+  imageUrl String? // keep temporarily (legacy)
+  images ServiceRequestImage[] 
+  events ServiceRequestEvent[]
+}
+
+
+model ServiceAssignment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now())
+
+  technicianId String @db.Uuid
+  technician   User   @relation("TechnicianAssignments", fields: [technicianId], references: [id])
+
+  serviceRequestId String         @unique @db.Uuid
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id])
+}
+
+model ServiceReport {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notes     String?
+  createdAt DateTime @default(now())
+
+  serviceRequestId String         @unique @db.Uuid
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id])
+}
+
+model ServiceRequestEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId String   @db.Uuid
+  type      String
+  message   String
+  createdAt DateTime @default(now())
+
+  request ServiceRequest @relation(fields: [requestId], references: [id])
+}
+
+model Product {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  price       Float?
+
+  // 🔥 MULTIPLE IMAGES
+  images      String[]
+
+  inStock  Boolean @default(true)
+  quantity Int     @default(0)
+
+  categoryId String   @db.Uuid
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Announcement {
+  id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title   String
+  content String
+
+  createdAt DateTime @default(now())
+}
+
+model Plan {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String
+  intervalMonths Int
+  description    String?
+
+  createdAt DateTime @default(now())
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  companyId String @db.Uuid
+  planId    String @db.Uuid // ✅ FIXED
+
+  startDate        DateTime @default(now())
+  currentPeriodEnd DateTime // ✅ ADD THIS
+  nextVisitDate    DateTime
+  status           String
+
+  createdAt DateTime @default(now())
+
+  company  Company   @relation(fields: [companyId], references: [id])
+  plan     Plan      @relation(fields: [planId], references: [id])
+  payments Payment[]
+}
+
+model Payment {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  companyId      String @db.Uuid
+  subscriptionId String @db.Uuid
+
+  amount Float
+  status String // success | failed
+  method String? // card, cash, etc.
+
+  createdAt DateTime @default(now())
+
+  company      Company      @relation(fields: [companyId], references: [id])
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+}
+
+
+
+model Category {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  products  Product[]
+}
+
+
+
+model ServiceRequestImage {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  url       String
+  createdAt DateTime @default(now())
+
+  requestId String         @db.Uuid
+  request   ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+}
+
+
+
+model ActivityLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String?  @db.Uuid
+  user      User?    @relation(fields: [userId], references: [id])
+
+  action    String
+  entity    String
+  entityId  String?
+
+  message   String
+
+  createdAt DateTime @default(now())
+}

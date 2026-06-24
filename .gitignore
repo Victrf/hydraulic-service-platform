@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+coverage/
+
+# logs
+*.log
+
+# uploads (if local only)
+src/uploads/
+uploads/
+
+# OS/editor
+.vscode/
+.DS_Store
+Thumbs.db
+
+# prisma local db
+prisma/dev.db
