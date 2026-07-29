@@ -52,12 +52,27 @@ export function mapUserProfile(user: UserProfileRecord) {
     email: user.email,
     role: user.role,
     companyId: user.companyId,
+
+    profileImage: user.profileImage,
+
     company: user.company
       ? {
           id: user.company.id,
           name: user.company.name,
+          email: user.company.email,
           address: user.company.address,
           phone: user.company.phone,
+          logoUrl: user.company.logoUrl,
+
+          contactName: user.company.contactName,
+          contactEmail: user.company.contactEmail,
+          contactPhone: user.company.contactPhone,
+          contactPosition: user.company.contactPosition,
+
+          escalatingName: user.company.escalatingName,
+          escalatingEmail: user.company.escalatingEmail,
+          escalatingPhone: user.company.escalatingPhone,
+          escalatingPosition: user.company.escalatingPosition,
         }
       : null,
     availableBrands,

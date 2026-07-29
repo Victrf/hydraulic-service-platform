@@ -19,7 +19,7 @@ import { Request } from 'express';
 export class ReportsController {
   constructor(private reportsService: ReportsService) {}
 
-  // ✅ SECURED CREATE (TECHNICIAN ONLY)
+  // ✅ Create Service Completion Report (Technician Only)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('technician')
   @Post()
@@ -30,16 +30,23 @@ export class ReportsController {
     return this.reportsService.create(body, req.user.sub, req.user.role);
   }
 
+  // ✅ Get all reports (Admin)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   @Get()
   findAll() {
     return this.reportsService.findAll();
   }
 
+  // ✅ Get report by request (Customer/Admin/Assigned Technician)
+  @UseGuards(JwtAuthGuard)
   @Get('request/:id')
   getReport(@Param('id') id: string) {
     return this.reportsService.getReportByRequest(id);
   }
 
+  // ✅ Get report by report id
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.reportsService.findOne(id);

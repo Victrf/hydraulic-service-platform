@@ -167,22 +167,31 @@ export class AssignmentsService {
   async getTechnicianWorkload() {
     const technicians = await this.prisma.user.findMany({
       where: { role: 'technician' },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        profileImage: true,
+      },
     });
-
     const assignments = await this.prisma.serviceAssignment.findMany({
       include: { serviceRequest: true },
     });
 
     const workloadMap: Record<
       string,
-      { technicianId: string; technicianName: string; activeJobs: number }
+      {
+        technicianId: string;
+        technicianName: string;
+        profileImage: string | null;
+        activeJobs: number;
+      }
     > = {};
 
     technicians.forEach((tech) => {
       workloadMap[tech.id] = {
         technicianId: tech.id,
         technicianName: tech.name,
+        profileImage: tech.profileImage,
         activeJobs: 0,
       };
     });

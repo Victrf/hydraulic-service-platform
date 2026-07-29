@@ -10,10 +10,12 @@ import {
   Animated,
   Easing,
 } from "react-native";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../navigation/types";
+import { useNotificationStore } from "../../store/notificationStore";
+import { socket } from "../../services/socket";
 import { api } from "../../api/client";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -37,6 +39,14 @@ export default function MyRequestsScreen() {
   const pulse = useState(new Animated.Value(1))[0];
 
   const navigation = useNavigation<NavigationProp>();
+  const addUpdate = useNotificationStore((state) => state.addUpdate);
+  const clearTab = useNotificationStore((state) => state.clearTab);
+
+  const activeCount = useNotificationStore((state) => state.activeCount());
+  const completedCount = useNotificationStore((state) =>
+    state.completedCount(),
+  );
+  const historyCount = useNotificationStore((state) => state.historyCount());
 
   const loadRequests = async (selectedView = view) => {
     try {
@@ -49,6 +59,24 @@ export default function MyRequestsScreen() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const handleRequestUpdated = (request: any) => {
+      loadRequests(view);
+
+      if (request.status === "completed") {
+        addUpdate(request.id, "completed");
+      } else {
+        addUpdate(request.id, "active");
+      }
+    };
+
+    socket.on("request.updated", handleRequestUpdated);
+
+    return () => {
+      socket.off("request.updated", handleRequestUpdated);
+    };
+  }, [view]);
 
   useFocusEffect(
     useCallback(() => {
@@ -82,6 +110,8 @@ export default function MyRequestsScreen() {
 
   const handleChangeView = (newView: typeof view) => {
     setView(newView);
+
+    clearTab(newView);
   };
 
   const openDeleteModal = (id: string) => {
@@ -119,6 +149,7 @@ export default function MyRequestsScreen() {
     if (status === "pending") return styles.statusPending;
     if (status === "in-progress") return styles.statusProgress;
     if (status === "completed") return styles.statusCompleted;
+    if (status === "accepted") return styles.statusAccepted;
     return styles.statusDefault;
   };
 
@@ -126,12 +157,13 @@ export default function MyRequestsScreen() {
     if (status === "pending") return "Pending";
     if (status === "in-progress") return "In Progress";
     if (status === "completed") return "Completed";
+    if (status === "accepted") return "Accepted";
     return status;
   };
 
   const handleNavigate = (item: any) => {
     if (view === "active") {
-      navigation.navigate("RequestDetails", {
+      navigation.navigate("CustomerRequestDetails", {
         requestId: item.id,
       });
       return;
@@ -169,6 +201,8 @@ export default function MyRequestsScreen() {
         {item.status === "pending" && "Waiting for technician assignment"}
         {item.status === "in-progress" && "Work is currently in progress"}
         {item.status === "completed" && "This request has been completed"}
+        {item.status === "accepted" &&
+          "Your technician has accepted this request and will begin work soon."}
       </Text>
 
       {view === "active" && (
@@ -239,13 +273,35 @@ export default function MyRequestsScreen() {
               style={[styles.tab, isActive && styles.activeTab]}
               onPress={() => handleChangeView(tab as any)}
             >
-              <Text style={[styles.tabText, isActive && styles.activeTabText]}>
-                {tab === "active"
-                  ? "Active"
-                  : tab === "completed"
-                    ? "Completed"
-                    : "History"}
-              </Text>
+              <View style={styles.tabContent}>
+                <Text
+                  style={[styles.tabText, isActive && styles.activeTabText]}
+                >
+                  {tab === "active"
+                    ? "Active"
+                    : tab === "completed"
+                      ? "Completed"
+                      : "History"}
+                </Text>
+
+                {tab === "active" && activeCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{activeCount}</Text>
+                  </View>
+                )}
+
+                {tab === "completed" && completedCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{completedCount}</Text>
+                  </View>
+                )}
+
+                {tab === "history" && historyCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{historyCount}</Text>
+                  </View>
+                )}
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -255,6 +311,35 @@ export default function MyRequestsScreen() {
         data={requests}
         keyExtractor={(item: any) => item.id}
         renderItem={renderItem}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons
+              name={
+                view === "active"
+                  ? "construct-outline"
+                  : view === "completed"
+                    ? "checkmark-circle-outline"
+                    : "time-outline"
+              }
+              size={48}
+              color="#475569"
+            />
+            <Text style={styles.emptyTitle}>
+              {view === "active"
+                ? "No Active Requests"
+                : view === "completed"
+                  ? "No Completed Requests"
+                  : "No History"}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {view === "active"
+                ? "You don't have any active service requests right now."
+                : view === "completed"
+                  ? "Completed requests will appear here."
+                  : "Removed requests will appear here."}
+            </Text>
+          </View>
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -324,9 +409,21 @@ export const styles = StyleSheet.create({
 
   tab: {
     flex: 1,
-    paddingVertical: 10,
+    height: 48,
+
+    justifyContent: "center",
     alignItems: "center",
-    borderRadius: 10,
+
+    borderRadius: 24,
+
+    borderWidth: 1.5,
+    borderColor: "rgba(124,58,237,0.45)",
+
+    backgroundColor: "rgba(124,58,237,0.06)",
+
+    marginHorizontal: 4,
+
+    overflow: "hidden",
   },
 
   activeTab: {
@@ -511,6 +608,7 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 30,
+    marginTop: 60,
   },
 
   emptyTitle: {
@@ -563,5 +661,30 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#020617",
+  },
+  statusAccepted: {
+    backgroundColor: "#7c3aed",
+  },
+  tabContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  badge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#ef4444",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 6,
+    paddingHorizontal: 5,
+  },
+
+  badgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
   },
 });

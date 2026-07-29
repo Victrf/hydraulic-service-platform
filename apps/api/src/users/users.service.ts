@@ -54,13 +54,18 @@ export class UsersService {
       data: {
         name: data.name,
         email: data.email,
+        phone: data.phone,
         passwordHash: hash,
         role: data.role,
         companyId,
+        profileImage: data.profileImage,
+
         availableEquipment: {
           create: equipmentIds.map((equipmentId) => ({
             equipment: {
-              connect: { id: equipmentId },
+              connect: {
+                id: equipmentId,
+              },
             },
           })),
         },
@@ -111,9 +116,12 @@ export class UsersService {
     data: {
       name?: string;
       email?: string;
+      phone?: string;
+
       role?: 'admin' | 'technician' | 'customer';
       companyId?: string;
       password?: string;
+      profileImage?: string;
     },
   ) {
     const existing = await this.prisma.user.findUnique({
@@ -135,9 +143,15 @@ export class UsersService {
       data: {
         name: data.name,
         email: data.email,
+        phone: data.phone,
         role: data.role,
-        companyId: data.companyId,
+        companyId:
+          data.companyId && data.companyId !== 'null' ? data.companyId : null,
         passwordHash,
+
+        ...(data.profileImage && {
+          profileImage: data.profileImage,
+        }),
       },
       include: userProfileInclude,
     });

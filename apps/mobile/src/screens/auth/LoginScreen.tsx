@@ -20,6 +20,7 @@ import { api } from "../../api/client";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { socket } from "../../services/socket";
 
 const { width } = Dimensions.get("window");
 
@@ -111,14 +112,26 @@ export default function LoginScreen() {
       setError("");
 
       const res = await api.post("/auth/login", { email, password });
+
       const token = res.data.access_token;
 
       await AsyncStorage.setItem("token", token);
-      const decoded = jwtDecode(token);
 
-      if (decoded.role === "admin") navigation.replace("Admin");
-      else if (decoded.role === "technician") navigation.replace("Technician");
-      else navigation.replace("Customer");
+      // Connect socket
+      socket.connect();
+
+      // Join this user's room
+      socket.emit("join", res.data.user.id);
+
+      const decoded = jwtDecode<any>(token);
+
+      if (decoded.role === "admin") {
+        navigation.replace("Admin");
+      } else if (decoded.role === "technician") {
+        navigation.replace("Technician");
+      } else {
+        navigation.replace("Customer");
+      }
     } catch {
       setError("Invalid email or password");
     } finally {

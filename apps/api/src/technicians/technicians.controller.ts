@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Patch,
   UseGuards,
   Req,
   Param,
@@ -26,6 +27,44 @@ export class TechniciansController {
     @Query('status') status?: string, //  ADD THIS
   ) {
     return this.service.getMyJobs(req.user.sub, status);
+  }
+
+  // ✅ ACCEPT JOB
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('technician')
+  @Patch('my-jobs/:id/accept')
+  acceptJob(
+    @Req() req: Request & { user: { sub: string } },
+    @Param('id') id: string,
+  ) {
+    return this.service.acceptJob(id, req.user.sub);
+  }
+
+  // ✅ START WORK
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('technician')
+  @Patch('my-jobs/:id/start')
+  startJob(
+    @Req() req: Request & { user: { sub: string } },
+    @Param('id') id: string,
+  ) {
+    return this.service.startJob(id, req.user.sub);
+  }
+
+  // ✅ COMPLETED JOB SUMMARY
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('technician')
+  @Get('completed-summary')
+  getCompletedSummary(@Req() req: Request & { user: { sub: string } }) {
+    return this.service.getCompletedSummary(req.user.sub);
+  }
+
+  // ✅ TECHNICIAN DASHBOARD
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('technician')
+  @Get('dashboard')
+  getDashboard(@Req() req: Request & { user: { sub: string } }) {
+    return this.service.getDashboard(req.user.sub);
   }
 
   //  GET SINGLE JOB

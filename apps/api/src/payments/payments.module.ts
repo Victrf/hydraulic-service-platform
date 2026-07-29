@@ -3,6 +3,7 @@ import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
 
 import { PrismaModule } from '../prisma/prisma.module';
+import { MailModule } from '../mail/mail.module';
 
 // ✅ ADD THIS
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -11,6 +12,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [
     PrismaModule,
     NotificationsModule, // ✅ REQUIRED
+    MailModule,
   ],
   providers: [PaymentsService],
   controllers: [PaymentsController],

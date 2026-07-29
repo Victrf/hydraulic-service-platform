@@ -4,10 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 
 @Injectable()
 export class ServiceRequestsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsGateway: NotificationsGateway,
+  ) {}
 
   async getCreateContext(userId: string) {
     const user = await this.prisma.user.findUnique({
@@ -81,11 +85,11 @@ export class ServiceRequestsService {
       data: {
         description: data.description,
         location: data.location,
+        userId: user.id, // ✅ NEW
         companyId: user.companyId,
         equipmentId,
       },
     });
-
     if (files.length > 0) {
       await this.prisma.serviceRequestImage.createMany({
         data: files.map((file) => ({
@@ -112,6 +116,72 @@ export class ServiceRequestsService {
         message: `Created service request`,
       },
     });
+    this.notificationsGateway.broadcast('request.created', request);
+
+    return request;
+  }
+
+  async createFromMaintenanceVisit(
+    maintenanceVisitId: string,
+    technicianId: string,
+    description: string,
+  ) {
+    const visit = await this.prisma.maintenanceVisit.findUnique({
+      where: {
+        id: maintenanceVisitId,
+      },
+      include: {
+        serviceRequest: true,
+      },
+    });
+
+    if (!visit) {
+      throw new NotFoundException('Maintenance visit not found');
+    }
+
+    if (visit.technicianId !== technicianId) {
+      throw new ForbiddenException(
+        'This maintenance visit is not assigned to you',
+      );
+    }
+
+    if (visit.serviceRequest) {
+      throw new ForbiddenException(
+        'A service request already exists for this maintenance visit',
+      );
+    }
+
+    const request = await this.prisma.serviceRequest.create({
+      data: {
+        userId: visit.userId,
+        companyId: visit.companyId,
+        equipmentId: visit.equipmentId,
+        maintenanceVisitId: visit.id,
+
+        description,
+        type: 'maintenance',
+        status: 'pending',
+      },
+    });
+
+    await this.prisma.serviceRequestEvent.create({
+      data: {
+        requestId: request.id,
+        type: 'created',
+        message: 'Service request created from maintenance visit',
+      },
+    });
+
+    await this.prisma.activityLog.create({
+      data: {
+        userId: technicianId,
+        action: 'REQUEST_CREATE',
+        entity: 'SERVICE_REQUEST',
+        entityId: request.id,
+        message: `Created service request from maintenance visit`,
+      },
+    });
+    this.notificationsGateway.broadcast('request.created', request);
 
     return request;
   }
@@ -214,6 +284,7 @@ export class ServiceRequestsService {
         where: { id },
         data: { status },
       });
+      this.notificationsGateway.broadcast('request.updated', updated);
 
       await this.prisma.activityLog.create({
         data: {
@@ -245,6 +316,7 @@ export class ServiceRequestsService {
       where: { id },
       data: { status },
     });
+    this.notificationsGateway.broadcast('request.updated', updated);
 
     await this.prisma.activityLog.create({
       data: {
@@ -256,7 +328,7 @@ export class ServiceRequestsService {
         message: `Updated request status to ${status}`,
       },
     });
-
+    this.notificationsGateway.broadcast('request.created', request);
     return updated;
   }
 
@@ -375,13 +447,15 @@ export class ServiceRequestsService {
     const skip = (page - 1) * limit;
 
     let where: any = {
-      companyId: user.companyId,
+      userId: user.id,
     };
 
     if (view === 'active') {
       where = {
         ...where,
-        status: { in: ['pending', 'in-progress'] },
+        status: {
+          in: ['pending', 'accepted', 'in-progress'],
+        },
         isHiddenByUser: false,
       };
     }
@@ -397,7 +471,7 @@ export class ServiceRequestsService {
     if (view === 'history') {
       where = {
         ...where,
-        OR: [{ isHiddenByUser: true }, { status: 'completed' }],
+        isHiddenByUser: true,
       };
     }
 
@@ -490,7 +564,7 @@ export class ServiceRequestsService {
     if (user.role === 'customer') {
       const requests = await this.prisma.serviceRequest.findMany({
         where: {
-          companyId: user.companyId ?? undefined,
+          userId: user.id,
         },
         include: {
           company: true,

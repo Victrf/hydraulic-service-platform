@@ -10,6 +10,7 @@ import {
   FlatList,
   Dimensions,
   Alert,
+  Animated,
 } from "react-native";
 import { useState, useRef, useEffect } from "react";
 import * as ImagePicker from "expo-image-picker";
@@ -42,7 +43,10 @@ export default function CreateCompanyScreen() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [focused, setFocused] = useState<string | null>(null);
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
   const flatListRef = useRef<FlatList>(null);
   const currentIndex = useRef(0);
 
@@ -77,10 +81,22 @@ export default function CreateCompanyScreen() {
   ];
 
   useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
     const interval = setInterval(() => {
       currentIndex.current =
         currentIndex.current < slides.length - 1 ? currentIndex.current + 1 : 0;
-
       flatListRef.current?.scrollToIndex({
         index: currentIndex.current,
         animated: true,
@@ -92,18 +108,15 @@ export default function CreateCompanyScreen() {
 
   const pickLogo = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
     if (!permission.granted) {
       Alert.alert("Permission required");
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.7,
       allowsMultipleSelection: false,
     });
-
     if (!result.canceled) {
       setLogo(result.assets[0]);
     }
@@ -120,7 +133,6 @@ export default function CreateCompanyScreen() {
       setError("");
 
       const formData = new FormData();
-
       formData.append("name", name.trim());
       formData.append("email", email.trim());
       formData.append("address", address.trim());
@@ -138,7 +150,6 @@ export default function CreateCompanyScreen() {
 
       if (logo) {
         const fileName = logo.uri.split("/").pop();
-
         formData.append("logo", {
           uri: logo.uri,
           name: fileName || "company-logo.jpg",
@@ -151,18 +162,17 @@ export default function CreateCompanyScreen() {
           "Content-Type": "multipart/form-data",
         },
       });
+
       Alert.alert("Success", "Company created");
 
       setName("");
       setEmail("");
       setAddress("");
       setPhone("");
-
       setContactName("");
       setContactEmail("");
       setContactPhone("");
       setContactPosition("");
-
       setEscalatingName("");
       setEscalatingEmail("");
       setEscalatingPhone("");
@@ -171,279 +181,400 @@ export default function CreateCompanyScreen() {
       navigation.goBack();
     } catch (err: any) {
       console.log("CREATE COMPANY ERROR:", err?.response?.data || err.message);
-
       setError(err?.response?.data?.message || "Failed to create company");
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Create Company</Text>
-        <Text style={styles.subtitle}>
-          Add a company to organize users and equipment
-        </Text>
-      </View>
+  const tabs = [
+    { id: "company", label: "Company", icon: "business-outline" },
+    { id: "contact", label: "Contact", icon: "person-outline" },
+    { id: "escalating", label: "Escalation", icon: "alert-circle-outline" },
+  ];
 
-      <FlatList
-        ref={flatListRef}
-        data={slides}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
-        style={{ marginBottom: 20 }}
-        onMomentumScrollEnd={(e) => {
-          const index = Math.round(
-            e.nativeEvent.contentOffset.x / (width - 40),
-          );
-          currentIndex.current = index;
+  const renderInput = (
+    placeholder: string,
+    value: string,
+    onChange: (val: string) => void,
+    fieldKey: string,
+    keyboardType: any = "default",
+  ) => (
+    <View style={styles.inputGroup}>
+      <Text style={styles.inputLabel}>{placeholder}</Text>
+      <TextInput
+        placeholder={placeholder}
+        placeholderTextColor="#475569"
+        style={[styles.input, focused === fieldKey && styles.inputFocused]}
+        value={value}
+        onFocus={() => setFocused(fieldKey)}
+        onBlur={() => setFocused(null)}
+        onChangeText={(val) => {
+          onChange(val);
+          if (error) setError("");
         }}
-        getItemLayout={(_, index) => ({
-          length: width - 40,
-          offset: (width - 40) * index,
-          index,
-        })}
-        renderItem={({ item }) => (
-          <View style={[styles.slide, { width: width - 40 }]}>
-            <Image source={{ uri: item.image }} style={styles.slideImage} />
-            <View style={styles.overlay} />
-
-            <View style={styles.slideContent}>
-              <Text style={styles.slideTitle}>{item.title}</Text>
-              <Text style={styles.slideSubtitle}>{item.subtitle}</Text>
-            </View>
-          </View>
-        )}
+        keyboardType={keyboardType}
+        autoCapitalize={fieldKey.includes("email") ? "none" : "sentences"}
       />
+    </View>
+  );
 
-      <View style={styles.card}>
-        <Pressable style={styles.logoBox} onPress={pickLogo}>
-          {logo ? (
-            <Image source={{ uri: logo.uri }} style={styles.logoPreview} />
-          ) : (
-            <>
-              <Ionicons name="image-outline" size={40} color="#6b7280" />
-              <Text style={styles.logoText}>Upload Company Logo</Text>
-            </>
-          )}
-        </Pressable>
+  return (
+    <View style={styles.screen}>
+      {/* Background Accents */}
+      <View style={styles.bgAccent} />
+      <View style={styles.bgAccent2} />
 
-        <View style={styles.tabsContainer}>
-          <Pressable style={styles.tab} onPress={() => setActiveTab("company")}>
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "company" && styles.activeTabText,
-              ]}
-            >
-              Company Info
-            </Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* HEADER */}
+        <Animated.View
+          style={[
+            styles.header,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          <Text style={styles.headerTag}>ONBOARDING</Text>
+          <Text style={styles.title}>Create Company</Text>
+          <Text style={styles.subtitle}>
+            Set up a new company with contacts and escalation details
+          </Text>
+        </Animated.View>
 
-            {activeTab === "company" && <View style={styles.activeUnderline} />}
-          </Pressable>
+        {/* IMAGE SLIDER */}
+        <Animated.View
+          style={[
+            styles.sliderContainer,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          <FlatList
+            ref={flatListRef}
+            data={slides}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            onMomentumScrollEnd={(e) => {
+              const index = Math.round(
+                e.nativeEvent.contentOffset.x / (width - 40),
+              );
+              currentIndex.current = index;
+            }}
+            getItemLayout={(_, index) => ({
+              length: width - 40,
+              offset: (width - 40) * index,
+              index,
+            })}
+            renderItem={({ item }) => (
+              <View style={[styles.slide, { width: width - 40 }]}>
+                <Image source={{ uri: item.image }} style={styles.slideImage} />
+                <View style={styles.slideOverlay} />
+                <View style={styles.slideContent}>
+                  <View style={styles.slideIconBox}>
+                    <Ionicons name="shield-checkmark" size={20} color="#fff" />
+                  </View>
+                  <Text style={styles.slideTitle}>{item.title}</Text>
+                  <Text style={styles.slideSubtitle}>{item.subtitle}</Text>
+                </View>
+              </View>
+            )}
+          />
+          {/* Slide Indicators */}
+          <View style={styles.indicators}>
+            {slides.map((_, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.indicator,
+                  idx === currentIndex.current && styles.indicatorActive,
+                ]}
+              />
+            ))}
+          </View>
+        </Animated.View>
 
-          <Pressable style={styles.tab} onPress={() => setActiveTab("contact")}>
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "contact" && styles.activeTabText,
-              ]}
-            >
-              Contact Person
-            </Text>
-
-            {activeTab === "contact" && <View style={styles.activeUnderline} />}
-          </Pressable>
-
+        {/* LOGO UPLOAD */}
+        <Animated.View
+          style={[
+            styles.glassCard,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          <Text style={styles.cardLabel}>Company Branding</Text>
           <Pressable
-            style={styles.tab}
-            onPress={() => setActiveTab("escalating")}
+            style={({ pressed }) => [
+              styles.logoBox,
+              pressed && styles.logoBoxPressed,
+              logo && styles.logoBoxFilled,
+            ]}
+            onPress={pickLogo}
           >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "escalating" && styles.activeTabText,
-              ]}
-            >
-              Escalating Person
-            </Text>
-
-            {activeTab === "escalating" && (
-              <View style={styles.activeUnderline} />
+            {logo ? (
+              <Image source={{ uri: logo.uri }} style={styles.logoPreview} />
+            ) : (
+              <View style={styles.logoPlaceholder}>
+                <View style={styles.logoIconBox}>
+                  <Ionicons name="camera-outline" size={28} color="#818cf8" />
+                </View>
+                <Text style={styles.logoText}>Upload Company Logo</Text>
+                <Text style={styles.logoSubtext}>Tap to select an image</Text>
+              </View>
             )}
           </Pressable>
-        </View>
+        </Animated.View>
 
-        {activeTab === "company" && (
-          <>
-            <TextInput
-              placeholder="Company Name"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={name}
-              onChangeText={(val) => {
-                setName(val);
-                if (error) setError("");
-              }}
-            />
+        {/* FORM CARD */}
+        <Animated.View
+          style={[
+            styles.glassCard,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          <Text style={styles.cardLabel}>Company Details</Text>
 
-            <TextInput
-              placeholder="Email"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-            />
+          {/* TABS */}
+          <View style={styles.tabsContainer}>
+            {tabs.map((tab) => (
+              <Pressable
+                key={tab.id}
+                style={styles.tab}
+                onPress={() => setActiveTab(tab.id)}
+              >
+                <View style={styles.tabContent}>
+                  <Ionicons
+                    name={tab.icon as any}
+                    size={16}
+                    color={activeTab === tab.id ? "#818cf8" : "#64748b"}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[
+                      styles.tabText,
+                      activeTab === tab.id && styles.tabTextActive,
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                </View>
+                {activeTab === tab.id && (
+                  <View style={styles.activeUnderline} />
+                )}
+              </Pressable>
+            ))}
+          </View>
 
-            <TextInput
-              placeholder="Address"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={address}
-              onChangeText={setAddress}
-            />
+          {/* COMPANY TAB - VERTICAL STACK */}
+          {activeTab === "company" && (
+            <View style={styles.formStack}>
+              {renderInput("Company Name *", name, setName, "name")}
+              {renderInput(
+                "Email Address",
+                email,
+                setEmail,
+                "email",
+                "email-address",
+              )}
+              {renderInput("Physical Address", address, setAddress, "address")}
+              {renderInput(
+                "Phone Number",
+                phone,
+                setPhone,
+                "phone",
+                "phone-pad",
+              )}
+            </View>
+          )}
 
-            <TextInput
-              placeholder="Phone"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={phone}
-              onChangeText={setPhone}
-            />
-          </>
-        )}
+          {/* CONTACT TAB - VERTICAL STACK */}
+          {activeTab === "contact" && (
+            <View style={styles.formStack}>
+              {renderInput(
+                "Contact Name",
+                contactName,
+                setContactName,
+                "contactName",
+              )}
+              {renderInput(
+                "Contact Email",
+                contactEmail,
+                setContactEmail,
+                "contactEmail",
+                "email-address",
+              )}
+              {renderInput(
+                "Contact Phone",
+                contactPhone,
+                setContactPhone,
+                "contactPhone",
+                "phone-pad",
+              )}
+              {renderInput(
+                "Position / Role",
+                contactPosition,
+                setContactPosition,
+                "contactPosition",
+              )}
+            </View>
+          )}
 
-        {activeTab === "contact" && (
-          <>
-            <TextInput
-              placeholder="Contact Name"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={contactName}
-              onChangeText={setContactName}
-            />
+          {/* ESCALATING TAB - VERTICAL STACK */}
+          {activeTab === "escalating" && (
+            <View style={styles.formStack}>
+              {renderInput(
+                "Escalation Name",
+                escalatingName,
+                setEscalatingName,
+                "escalatingName",
+              )}
+              {renderInput(
+                "Escalation Email",
+                escalatingEmail,
+                setEscalatingEmail,
+                "escalatingEmail",
+                "email-address",
+              )}
+              {renderInput(
+                "Escalation Phone",
+                escalatingPhone,
+                setEscalatingPhone,
+                "escalatingPhone",
+                "phone-pad",
+              )}
+              {renderInput(
+                "Position / Role",
+                escalatingPosition,
+                setEscalatingPosition,
+                "escalatingPosition",
+              )}
+            </View>
+          )}
 
-            <TextInput
-              placeholder="Contact Email"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={contactEmail}
-              onChangeText={setContactEmail}
-            />
+          {error ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorIcon}>⚠</Text>
+              <Text style={styles.error}>{error}</Text>
+            </View>
+          ) : null}
+        </Animated.View>
 
-            <TextInput
-              placeholder="Contact Phone"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={contactPhone}
-              onChangeText={setContactPhone}
-            />
+        {/* CREATE BUTTON */}
+        <Pressable
+          disabled={loading}
+          style={({ pressed }) => [
+            styles.btn,
+            pressed && styles.btnPressed,
+            loading && styles.btnLoading,
+          ]}
+          onPress={createCompany}
+        >
+          <View style={styles.btnInner}>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Text style={styles.btnText}>Create Company</Text>
+                <Ionicons
+                  name="arrow-forward"
+                  size={18}
+                  color="#fff"
+                  style={{ marginLeft: 8 }}
+                />
+              </>
+            )}
+          </View>
+          <View style={styles.btnGlow} />
+        </Pressable>
 
-            <TextInput
-              placeholder="Position"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={contactPosition}
-              onChangeText={setContactPosition}
-            />
-          </>
-        )}
-
-        {activeTab === "escalating" && (
-          <>
-            <TextInput
-              placeholder="Escalating Name"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={escalatingName}
-              onChangeText={setEscalatingName}
-            />
-
-            <TextInput
-              placeholder="Escalating Email"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={escalatingEmail}
-              onChangeText={setEscalatingEmail}
-            />
-
-            <TextInput
-              placeholder="Escalating Phone"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={escalatingPhone}
-              onChangeText={setEscalatingPhone}
-            />
-
-            <TextInput
-              placeholder="Position"
-              placeholderTextColor="#6b7280"
-              style={styles.input}
-              value={escalatingPosition}
-              onChangeText={setEscalatingPosition}
-            />
-          </>
-        )}
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-      </View>
-
-      <Pressable
-        disabled={loading}
-        style={({ pressed }) => [
-          styles.createBtn,
-          pressed && styles.pressed,
-          loading && { opacity: 0.7 },
-        ]}
-        onPress={createCompany}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.createText}>Create Company</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#020617",
+    backgroundColor: "#030712",
+  },
+
+  bgAccent: {
+    position: "absolute",
+    top: -100,
+    left: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: "#4f46e5",
+    opacity: 0.15,
+  },
+
+  bgAccent2: {
+    position: "absolute",
+    bottom: -80,
+    right: -80,
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    backgroundColor: "#7c3aed",
+    opacity: 0.12,
+  },
+
+  scroll: {
+    flex: 1,
   },
 
   container: {
     padding: 20,
-    paddingTop: 70,
-    paddingBottom: 50,
+    paddingTop: 60,
   },
 
   header: {
-    marginBottom: 20,
+    marginBottom: 24,
+  },
+
+  headerTag: {
+    color: "#6366f1",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    marginBottom: 8,
   },
 
   title: {
-    color: "#fff",
-    fontSize: 26,
-    fontWeight: "700",
+    color: "#f8fafc",
+    fontSize: 32,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    marginBottom: 8,
   },
 
   subtitle: {
-    color: "#9ca3af",
-    marginTop: 6,
-    fontSize: 13,
+    color: "#94a3b8",
+    fontSize: 15,
+    lineHeight: 22,
+    maxWidth: "90%",
   },
 
-  // SLIDER
+  /* SLIDER */
+  sliderContainer: {
+    marginBottom: 20,
+  },
+
   slide: {
-    height: 140,
-    borderRadius: 18,
+    height: 160,
+    borderRadius: 24,
     overflow: "hidden",
-    marginRight: 10,
+    marginRight: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
   },
 
   slideImage: {
@@ -452,130 +583,291 @@ const styles = StyleSheet.create({
     position: "absolute",
   },
 
-  overlay: {
+  slideOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(2,6,23,0.6)",
+    backgroundColor: "rgba(2, 6, 23, 0.55)",
   },
 
   slideContent: {
     flex: 1,
     justifyContent: "flex-end",
-    padding: 14,
+    padding: 20,
+  },
+
+  slideIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(99, 102, 241, 0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
 
   slideTitle: {
     color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
+    fontWeight: "800",
+    fontSize: 18,
+    letterSpacing: -0.3,
   },
 
   slideSubtitle: {
-    color: "#cbd5f5",
-    fontSize: 12,
-    marginTop: 2,
+    color: "#94a3b8",
+    fontSize: 13,
+    marginTop: 4,
+    fontWeight: "500",
   },
 
-  // FORM CARD
-  card: {
-    backgroundColor: "#0f172a",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-
-  tabsContainer: {
+  indicators: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1e293b",
+    justifyContent: "center",
+    marginTop: 12,
+    gap: 6,
   },
 
-  tab: {
-    flex: 1,
-    alignItems: "center",
-    paddingBottom: 12,
+  indicator: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
 
-  tabText: {
-    color: "#94a3b8",
-    fontSize: 12,
-    fontWeight: "600",
-    textAlign: "center",
+  indicatorActive: {
+    width: 20,
+    backgroundColor: "#6366f1",
+    borderRadius: 3,
   },
 
-  activeTabText: {
-    color: "#ffffff",
-  },
-
-  activeUnderline: {
-    position: "absolute",
-    bottom: -1,
-    height: 3,
-    width: "100%",
-    backgroundColor: "#7c3aed",
-    borderRadius: 999,
-  },
-
-  sectionTitle: {
-    color: "#94a3b8",
-    fontSize: 12,
-    marginBottom: 12,
-    textTransform: "uppercase",
-  },
-
-  input: {
-    backgroundColor: "#020617",
-    color: "#fff",
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 12,
+  /* CARDS */
+  glassCard: {
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#1e293b",
+    borderColor: "rgba(255, 255, 255, 0.06)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    elevation: 8,
   },
 
-  error: {
-    color: "#ef4444",
-    fontSize: 12,
+  cardLabel: {
+    color: "#e2e8f0",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 16,
+    letterSpacing: 0.5,
   },
 
-  createBtn: {
-    backgroundColor: "#7c3aed",
-    padding: 18,
-    borderRadius: 16,
-    alignItems: "center",
-  },
+  /* LOGO */
   logoBox: {
-    height: 140,
+    height: 160,
     borderRadius: 20,
-    backgroundColor: "#0f172a",
-    borderWidth: 1,
-    borderColor: "#1e293b",
+    backgroundColor: "rgba(2, 6, 23, 0.5)",
+    borderWidth: 2,
+    borderColor: "rgba(99, 102, 241, 0.15)",
+    borderStyle: "dashed",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
     overflow: "hidden",
+  },
+
+  logoBoxPressed: {
+    backgroundColor: "rgba(2, 6, 23, 0.7)",
+    borderColor: "rgba(99, 102, 241, 0.3)",
+  },
+
+  logoBoxFilled: {
+    borderStyle: "solid",
+    borderColor: "rgba(99, 102, 241, 0.3)",
+  },
+
+  logoPlaceholder: {
+    alignItems: "center",
+  },
+
+  logoIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "rgba(99, 102, 241, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(99, 102, 241, 0.2)",
+  },
+
+  logoText: {
+    color: "#e2e8f0",
+    fontSize: 15,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+
+  logoSubtext: {
+    color: "#64748b",
+    fontSize: 13,
   },
 
   logoPreview: {
     width: "100%",
     height: "100%",
+    resizeMode: "cover",
   },
 
-  logoText: {
-    color: "#94a3b8",
-    marginTop: 8,
+  /* TABS */
+  tabsContainer: {
+    flexDirection: "row",
+    marginBottom: 20,
+    backgroundColor: "rgba(2, 6, 23, 0.4)",
+    borderRadius: 16,
+    padding: 4,
   },
 
-  createText: {
-    color: "#fff",
+  tab: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+
+  tabContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  tabText: {
+    color: "#64748b",
+    fontSize: 13,
     fontWeight: "600",
-    fontSize: 16,
   },
 
-  pressed: {
-    transform: [{ scale: 0.97 }],
+  tabTextActive: {
+    color: "#e2e8f0",
+    fontWeight: "700",
+  },
+
+  activeUnderline: {
+    position: "absolute",
+    bottom: 0,
+    left: 8,
+    right: 8,
+    height: 3,
+    backgroundColor: "#6366f1",
+    borderRadius: 2,
+  },
+
+  /* FORM STACK - VERTICAL LAYOUT */
+  formStack: {
+    flexDirection: "column",
+    width: "100%",
+  },
+
+  /* INPUTS */
+  inputGroup: {
+    marginBottom: 14,
+    width: "100%",
+  },
+
+  inputLabel: {
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 6,
+    marginLeft: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+
+  input: {
+    backgroundColor: "rgba(2, 6, 23, 0.5)",
+    color: "#f1f5f9",
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.15)",
+    fontSize: 15,
+    fontWeight: "500",
+    width: "100%",
+  },
+
+  inputFocused: {
+    borderColor: "#6366f1",
+    backgroundColor: "rgba(2, 6, 23, 0.7)",
+  },
+
+  /* ERROR */
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.2)",
+  },
+
+  errorIcon: {
+    marginRight: 8,
+    fontSize: 14,
+  },
+
+  error: {
+    color: "#f87171",
+    fontSize: 13,
+    fontWeight: "500",
+    flex: 1,
+  },
+
+  /* BUTTON */
+  btn: {
+    marginTop: 8,
+    borderRadius: 18,
+    overflow: "hidden",
+    position: "relative",
+  },
+
+  btnPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+
+  btnLoading: {
+    opacity: 0.8,
+  },
+
+  btnInner: {
+    backgroundColor: "#4f46e5",
+    padding: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+
+  btnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+    letterSpacing: 0.3,
+  },
+
+  btnGlow: {
+    position: "absolute",
+    top: 0,
+    left: "20%",
+    right: "20%",
+    height: "50%",
+    backgroundColor: "#6366f1",
+    opacity: 0.3,
+    borderRadius: 18,
+    zIndex: -1,
   },
 });

@@ -27,7 +27,7 @@ export default function CustomerHomeScreen() {
   const navigation = useNavigation();
 
   const [announcements, setAnnouncements] = useState<any[]>([]);
-  const [subscription, setSubscription] = useState<any>(null);
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
 
   const listRef = useRef<Animated.FlatList<any>>(null);
@@ -95,18 +95,23 @@ export default function CustomerHomeScreen() {
       type: "announcement",
       data: a,
     })),
-    ...(subscription
-      ? [{ type: "subscription", data: subscription }]
+    ...(subscriptions.length > 0
+      ? subscriptions.map((sub) => ({
+          type: "subscription",
+          data: sub,
+        }))
       : [
           { type: "no-subscription" },
-          ...plans.map((p) => ({ type: "plan", data: p })),
+          ...plans.map((p) => ({
+            type: "plan",
+            data: p,
+          })),
         ]),
   ];
 
   // BOTTOM SLIDER AUTO SCROLL
   useEffect(() => {
     if (!slides.length) return;
-
     const interval = setInterval(() => {
       bottomIndex.current =
         bottomIndex.current === slides.length - 1 ? 0 : bottomIndex.current + 1;
@@ -152,7 +157,7 @@ export default function CustomerHomeScreen() {
   const loadSubscription = async () => {
     try {
       const res = await api.get("/subscriptions/me");
-      setSubscription(res.data);
+      setSubscriptions(res.data);
     } catch (err) {
       console.log("SUBSCRIPTION ERROR:", err);
     }
@@ -229,7 +234,7 @@ export default function CustomerHomeScreen() {
             listRef={listRef}
             ITEM_WIDTH={ITEM_WIDTH}
             navigation={navigation}
-            subscription={subscription}
+            subscriptions={subscriptions}
             plans={plans}
           />
 

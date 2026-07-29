@@ -10,6 +10,9 @@ import {
 import { useState } from "react";
 import { api } from "../../api/client";
 import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
+import SuccessModal from "../../components/common/SuccessModal";
+import ErrorModal from "../../components/common/ErrorModal";
 
 export default function CreateAnnouncementScreen() {
   const navigation = useNavigation<any>();
@@ -17,10 +20,17 @@ export default function CreateAnnouncementScreen() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [successVisible, setSuccessVisible] = useState(false);
+
+  const [errorVisible, setErrorVisible] = useState(false);
+  const [errorTitle, setErrorTitle] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleCreate = async () => {
     if (!title.trim() || !content.trim()) {
-      Alert.alert("Validation", "All fields are required");
+      setErrorTitle("Validation Error");
+      setErrorMessage("Please complete all required fields.");
+      setErrorVisible(true);
       return;
     }
 
@@ -32,48 +42,89 @@ export default function CreateAnnouncementScreen() {
         content: content.trim(),
       });
 
-      Alert.alert("Success", "Announcement created");
+      setSuccessVisible(true);
 
       // ✅ reset (prevents stale data if user comes back)
       setTitle("");
       setContent("");
-
-      navigation.goBack();
-
     } catch (err: any) {
       console.log("CREATE ERROR:", err?.response?.data || err.message);
 
-      Alert.alert(
-        "Create failed",
+      setErrorTitle("Create Failed");
+
+      setErrorMessage(
         err?.response?.data?.message ||
-          "You must be admin or token is invalid"
+          "You must be an administrator to create announcements.",
       );
+
+      setErrorVisible(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={{ padding: 16 }}>
-      <Text style={styles.title}>Create Announcement</Text>
-      <Text style={styles.subtitle}>Send updates to all users</Text>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={{
+        padding: 16,
+        paddingTop: 50,
+        paddingBottom: 40,
+      }}
+    >
+      <View style={styles.hero}>
+        <View style={styles.heroIcon}>
+          <Ionicons name="megaphone-outline" size={32} color="#a78bfa" />
+        </View>
 
-      <TextInput
-        placeholder="Title"
-        placeholderTextColor="#6b7280"
-        style={styles.input}
-        value={title}
-        onChangeText={setTitle}
-      />
+        <Text style={styles.title}>Create Announcement</Text>
 
-      <TextInput
-        placeholder="Content"
-        placeholderTextColor="#6b7280"
-        style={[styles.input, { height: 120 }]}
-        multiline
-        value={content}
-        onChangeText={setContent}
-      />
+        <Text style={styles.subtitle}>
+          Broadcast important updates, maintenance notices and company news to
+          all users.
+        </Text>
+      </View>
+
+      <View style={styles.field}>
+        <View style={styles.labelRow}>
+          <Ionicons name="create-outline" size={18} color="#a78bfa" />
+
+          <Text style={styles.label}>Announcement Title</Text>
+        </View>
+
+        <TextInput
+          placeholder="Enter announcement title..."
+          placeholderTextColor="#6b7280"
+          style={styles.input}
+          value={title}
+          onChangeText={setTitle}
+          maxLength={100}
+        />
+        <Text style={styles.counter}>{title.length}/100 characters</Text>
+      </View>
+
+      <View style={styles.field}>
+        <View style={styles.labelRow}>
+          <Ionicons
+            name="chatbubble-ellipses-outline"
+            size={18}
+            color="#a78bfa"
+          />
+
+          <Text style={styles.label}>Announcement Message</Text>
+        </View>
+
+        <TextInput
+          placeholder="Write your announcement here..."
+          placeholderTextColor="#6b7280"
+          style={[styles.input, styles.messageInput]}
+          multiline
+          textAlignVertical="top"
+          value={content}
+          onChangeText={setContent}
+          maxLength={500}
+        />
+      </View>
 
       <Pressable
         style={[styles.button, loading && { opacity: 0.6 }]}
@@ -84,10 +135,30 @@ export default function CreateAnnouncementScreen() {
           {loading ? "Creating..." : "Create Announcement"}
         </Text>
       </Pressable>
+      <SuccessModal
+        visible={successVisible}
+        title="Announcement Published"
+        message="Your announcement has been published successfully."
+        buttonText="Continue"
+        onContinue={() => {
+          setSuccessVisible(false);
+          navigation.goBack();
+        }}
+      />
+      <ErrorModal
+        visible={errorVisible}
+        title={errorTitle}
+        message={errorMessage}
+        buttonText="OK"
+        onClose={() => {
+          setErrorVisible(false);
+          setErrorTitle("");
+          setErrorMessage("");
+        }}
+      />
     </ScrollView>
   );
 }
-
 
 const styles = StyleSheet.create({
   screen: {
@@ -97,23 +168,31 @@ const styles = StyleSheet.create({
 
   title: {
     color: "#fff",
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
+    textAlign: "center",
   },
-
   subtitle: {
-    color: "#9ca3af",
-    marginBottom: 20,
+    color: "#94a3b8",
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  messageInput: {
+    height: 180,
   },
 
   input: {
     backgroundColor: "#0f172a",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     color: "#fff",
     borderWidth: 1,
     borderColor: "#1e293b",
+    fontSize: 15,
   },
 
   button: {
@@ -126,5 +205,43 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#fff",
     fontWeight: "600",
+  },
+  hero: {
+    alignItems: "center",
+    marginBottom: 28,
+  },
+
+  heroIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#1e1b4b",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#312e81",
+  },
+  field: {
+    marginBottom: 20,
+  },
+
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+
+  label: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+  counter: {
+    color: "#64748b",
+    fontSize: 12,
+    textAlign: "right",
+    marginTop: 6,
   },
 });

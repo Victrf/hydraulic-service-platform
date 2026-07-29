@@ -1,5 +1,13 @@
-import { View, Text, StyleSheet, Animated, Pressable } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Pressable,
+  Image,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { api } from "../api/client";
 
 export default function HeroSection({
   user,
@@ -7,7 +15,7 @@ export default function HeroSection({
   listRef,
   ITEM_WIDTH,
   navigation,
-  subscription,
+  subscriptions,
   plans,
 }: any) {
   const safeUser = user || {};
@@ -30,8 +38,10 @@ export default function HeroSection({
         <View style={styles.headerRight}>
           <Pressable
             onPress={() => {
-              if (subscription) {
-                navigation.navigate("MySubscription", { subscription });
+              if (subscriptions.length > 0) {
+                navigation.navigate("MySubscription", {
+                  subscriptions,
+                });
               } else {
                 navigation.navigate("Plans", {
                   plans: plans || [],
@@ -44,9 +54,18 @@ export default function HeroSection({
           </Pressable>
 
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {safeUser?.name ? safeUser.name.charAt(0).toUpperCase() : "U"}
-            </Text>
+            {safeUser?.profileImage ? (
+              <Image
+                source={{
+                  uri: `${api.defaults.baseURL}/uploads/users/${safeUser.profileImage}`,
+                }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {safeUser?.name ? safeUser.name.charAt(0).toUpperCase() : "U"}
+              </Text>
+            )}
           </View>
         </View>
       </View>
@@ -122,9 +141,9 @@ const styles = StyleSheet.create({
   },
 
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: "#7c3aed",
     justifyContent: "center",
     alignItems: "center",
@@ -164,5 +183,10 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
     fontSize: 11,
     marginTop: 1,
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 24,
   },
 });

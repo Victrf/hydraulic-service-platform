@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ConfigService } from '@nestjs/config';
+
+import { PrismaService } from '../prisma/prisma.service';
 
 interface JwtPayload {
   sub: string;
@@ -9,18 +12,36 @@ interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: 'super-secret-key',
+      secretOrKey: configService.getOrThrow<string>('JWT_SECRET'),
     });
   }
 
-  validate(payload: JwtPayload) {
+  async validate(payload: JwtPayload) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: payload.sub,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid authentication token.');
+    }
+
+    if (!user.active) {
+      throw new UnauthorizedException('Account has been disabled.');
+    }
+
     return {
-      sub: payload.sub, // ✅ THIS LINE FIXES EVERYTHING
-      role: payload.role,
+      id: user.id,
+      sub: user.id,
+      role: user.role,
     };
   }
 }

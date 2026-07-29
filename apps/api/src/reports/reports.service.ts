@@ -1,17 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateReportDto } from './dto/create-report.dto';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 
 @Injectable()
 export class ReportsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsGateway: NotificationsGateway,
+  ) {}
 
   // ✅ SECURE CREATE REPORT
-  async create(
-    data: { serviceRequestId: string; notes?: string },
-    userId: string,
-    role: string,
-  ) {
-    // 1. fetch request with assignment + report
+  async create(data: CreateReportDto, userId: string, role: string) {
+    // 1. Fetch request with assignment + existing report
     const request = await this.prisma.serviceRequest.findUnique({
       where: { id: data.serviceRequestId },
       include: {
@@ -24,50 +25,50 @@ export class ReportsService {
       throw new Error('Request not found');
     }
 
-    // 🔒 role check (extra safety)
+    // 🔒 Only technicians can submit reports
     if (role !== 'technician') {
       throw new Error('Only technicians can submit reports');
     }
 
-    // ❌ must be assigned
+    // ❌ Request must be assigned
     if (!request.assignment) {
       throw new Error('Request is not assigned');
     }
 
-    // ❌ must belong to technician
+    // ❌ Technician must own assignment
     if (request.assignment.technicianId !== userId) {
       throw new Error('Unauthorized: not your assignment');
     }
 
-    // ❌ prevent duplicate reports
+    // ❌ Prevent duplicate reports
     if (request.report) {
       throw new Error('Report already submitted for this request');
     }
 
-    // ✅ create report
+    // ✅ Create Service Completion Report
     const report = await this.prisma.serviceReport.create({
       data: {
         serviceRequestId: data.serviceRequestId,
-        notes: data.notes,
-      },
-      include: {
-        serviceRequest: true,
-      },
-    });
 
-    // ✅ OPTIONAL: auto-complete request
-    await this.prisma.serviceRequest.update({
-      where: { id: data.serviceRequestId },
-      data: {
-        status: 'completed',
+        // Inspection
+        findings: data.findings,
+        rootCause: data.rootCause,
+        workPerformed: data.workPerformed,
+        recommendations: data.recommendations,
+
+        // Completion Checklist
+        equipmentTested: data.equipmentTested ?? false,
+        operational: data.operational ?? false,
+        customerInformed: data.customerInformed ?? false,
+        areaCleaned: data.areaCleaned ?? false,
+        safetyChecks: data.safetyChecks ?? false,
+        customerAccepted: data.customerAccepted ?? false,
+
+        // Time Tracking
+        startedAt: data.startedAt,
+        completedAt: data.completedAt,
       },
-    });
 
-    return report;
-  }
-
-  async findAll() {
-    return await this.prisma.serviceReport.findMany({
       include: {
         serviceRequest: {
           include: {
@@ -82,21 +83,120 @@ export class ReportsService {
         },
       },
     });
+
+    // ✅ Automatically mark request as completed
+    const updatedRequest = await this.prisma.serviceRequest.update({
+      where: { id: data.serviceRequestId },
+      data: {
+        status: 'completed',
+      },
+    });
+
+    await this.prisma.serviceRequestEvent.create({
+      data: {
+        requestId: data.serviceRequestId,
+        type: 'completed',
+        message: 'Technician completed the service and submitted the report.',
+      },
+    });
+
+    // ✅ Notify customer in real time
+    this.notificationsGateway.notifyUser(
+      request.userId,
+      'request.updated',
+      updatedRequest,
+    );
+
+    return report;
   }
 
-  async findOne(id: string) {
-    return await this.prisma.serviceReport.findUnique({
-      where: { id },
+  // ✅ Admin - All Reports
+  async findAll() {
+    return this.prisma.serviceReport.findMany({
       include: {
-        serviceRequest: true,
+        serviceRequest: {
+          include: {
+            equipment: true,
+
+            company: true,
+
+            assignment: {
+              include: {
+                technician: true,
+              },
+            },
+
+            images: true,
+
+            events: {
+              orderBy: {
+                createdAt: 'asc',
+              },
+            },
+          },
+        },
       },
     });
   }
 
+  // ✅ Single Report
+  async findOne(id: string) {
+    return this.prisma.serviceReport.findUnique({
+      where: { id },
+      include: {
+        serviceRequest: {
+          include: {
+            equipment: true,
+
+            company: true,
+
+            assignment: {
+              include: {
+                technician: true,
+              },
+            },
+
+            images: true,
+
+            events: {
+              orderBy: {
+                createdAt: 'asc',
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // ✅ Customer/Admin Report by Request
   async getReportByRequest(requestId: string) {
     return this.prisma.serviceReport.findFirst({
       where: {
         serviceRequestId: requestId,
+      },
+      include: {
+        serviceRequest: {
+          include: {
+            equipment: true,
+
+            company: true,
+
+            assignment: {
+              include: {
+                technician: true,
+              },
+            },
+
+            images: true,
+
+            events: {
+              orderBy: {
+                createdAt: 'asc',
+              },
+            },
+          },
+        },
       },
     });
   }

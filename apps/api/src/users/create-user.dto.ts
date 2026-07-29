@@ -1,10 +1,4 @@
-import {
-  IsString,
-  IsEmail,
-  IsOptional,
-  IsArray,
-  IsIn,
-} from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsArray, IsIn } from 'class-validator';
 
 export class CreateUserDto {
   @IsString()
@@ -15,6 +9,10 @@ export class CreateUserDto {
 
   @IsString()
   password!: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
 
   @IsIn(['admin', 'technician', 'customer'])
   role!: 'admin' | 'technician' | 'customer';
@@ -27,4 +25,8 @@ export class CreateUserDto {
   @IsArray()
   @IsString({ each: true })
   equipmentIds?: string[];
+
+  @IsOptional()
+  @IsString()
+  profileImage?: string;
 }

@@ -7,14 +7,20 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useEffect, useState } from "react";
+import { useState, useCallback } from "react";
 import { api } from "../../api/client";
-import { useRoute, useNavigation } from "@react-navigation/native";
+import {
+  useRoute,
+  useNavigation,
+  useFocusEffect,
+} from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
+import SuccessModal from "../../components/common/SuccessModal";
 
 export default function AssignEquipmentScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
+  const [successVisible, setSuccessVisible] = useState(false);
 
   const { user } = route.params;
 
@@ -24,12 +30,15 @@ export default function AssignEquipmentScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, []),
+  );
 
   const loadData = async () => {
     try {
+      setLoading(true);
       const res = await api.get("/equipment");
 
       const equipmentList = Array.isArray(res.data)
@@ -37,32 +46,28 @@ export default function AssignEquipmentScreen() {
         : res.data?.data || [];
 
       // ✅ STEP 1: get assigned IDs
-      const assignedIds =
-        user.availableEquipment?.map((e: any) => e.id) || [];
+      const assignedIds = user.availableEquipment?.map((e: any) => e.id) || [];
 
       // ✅ STEP 2: filter by company
       const filtered = equipmentList.filter(
-        (e: any) => e.companyId === user.companyId
+        (e: any) => e.companyId === user.companyId,
       );
 
       // ✅ STEP 3: include assigned equipment (even if not in filtered)
       const assignedEquipment = equipmentList.filter((e: any) =>
-        assignedIds.includes(e.id)
+        assignedIds.includes(e.id),
       );
 
       // ✅ STEP 4: merge without duplicates
       const merged = [
         ...assignedEquipment,
-        ...filtered.filter(
-          (e: any) => !assignedIds.includes(e.id)
-        ),
+        ...filtered.filter((e: any) => !assignedIds.includes(e.id)),
       ];
 
       setEquipment(merged);
 
       // ✅ STEP 5: pre-select assigned
       setSelected(assignedIds);
-
     } catch (err: any) {
       console.log("LOAD ERROR:", err?.response?.data || err.message);
       Alert.alert("Error", "Failed to load equipment");
@@ -87,15 +92,13 @@ export default function AssignEquipmentScreen() {
         equipmentIds: selected,
       });
 
-      Alert.alert("Success", "Equipment updated");
-      navigation.goBack();
-
+      setSuccessVisible(true);
     } catch (err: any) {
       console.log("SAVE ERROR:", err?.response?.data || err.message);
 
       Alert.alert(
         "Save failed",
-        err?.response?.data?.message || "Check backend route"
+        err?.response?.data?.message || "Check backend route",
       );
     } finally {
       setSaving(false);
@@ -119,11 +122,52 @@ export default function AssignEquipmentScreen() {
         </Text>
       </View>
 
+      {equipment.length > 0 && (
+        <Pressable
+          style={styles.addEquipmentBtn}
+          onPress={() =>
+            navigation.navigate("CreateEquipment", {
+              companyId: user.companyId,
+              companyName: user.company?.name,
+              lockCompany: !!user.companyId,
+              returnTo: "AssignEquipment",
+              user,
+            })
+          }
+        >
+          <Ionicons name="add-circle-outline" size={18} color="#fff" />
+
+          <Text style={styles.addEquipmentText}>Add Equipment</Text>
+        </Pressable>
+      )}
+
       {equipment.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.empty}>
-            No equipment available
+        <View style={styles.emptyState}>
+          <Ionicons name="cube-outline" size={70} color="#475569" />
+
+          <Text style={styles.emptyTitle}>No Equipment Found</Text>
+
+          <Text style={styles.emptyDescription}>
+            {user.company?.name || "This company"} doesn't have any equipment
+            yet. Create equipment first, then assign it to this user.
           </Text>
+
+          <Pressable
+            style={styles.createEquipmentBtn}
+            onPress={() =>
+              navigation.navigate("CreateEquipment", {
+                companyId: user.companyId,
+                companyName: user.company?.name,
+                lockCompany: !!user.companyId,
+                returnTo: "AssignEquipment",
+                user,
+              })
+            }
+          >
+            <Ionicons name="add-circle-outline" size={18} color="#fff" />
+
+            <Text style={styles.createEquipmentText}>Create Equipment</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
@@ -142,9 +186,7 @@ export default function AssignEquipmentScreen() {
                   <Text style={styles.meta}>
                     {item.brand} • {item.model}
                   </Text>
-                  <Text style={styles.meta}>
-                    SN: {item.serialNumber}
-                  </Text>
+                  <Text style={styles.meta}>SN: {item.serialNumber}</Text>
                 </View>
 
                 <Ionicons
@@ -169,6 +211,16 @@ export default function AssignEquipmentScreen() {
           <Text style={styles.saveText}>Save Assignment</Text>
         )}
       </Pressable>
+      <SuccessModal
+        visible={successVisible}
+        title="Equipment Assigned"
+        message="The equipment assignments have been updated successfully."
+        buttonText="Continue"
+        onContinue={() => {
+          setSuccessVisible(false);
+          navigation.goBack();
+        }}
+      />
     </View>
   );
 }
@@ -244,5 +296,60 @@ const styles = StyleSheet.create({
 
   empty: {
     color: "#6b7280",
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 30,
+  },
+
+  emptyTitle: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "700",
+    marginTop: 20,
+  },
+
+  emptyDescription: {
+    color: "#94a3b8",
+    textAlign: "center",
+    marginTop: 12,
+    lineHeight: 22,
+    fontSize: 15,
+  },
+
+  createEquipmentBtn: {
+    marginTop: 28,
+    backgroundColor: "#7c3aed",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  createEquipmentText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  addEquipmentBtn: {
+    backgroundColor: "#7c3aed",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+
+  addEquipmentText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });

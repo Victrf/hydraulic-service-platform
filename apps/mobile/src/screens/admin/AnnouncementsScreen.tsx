@@ -10,6 +10,7 @@ import { useState, useCallback } from "react";
 import { api } from "../../api/client";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import EmptyState from "../../components/common/EmptyState";
 
 export default function AnnouncementsScreen() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -30,9 +31,7 @@ export default function AnnouncementsScreen() {
 
       const res = await api.get("/announcements");
 
-      const data = Array.isArray(res.data)
-        ? res.data
-        : res.data?.data || [];
+      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
 
       setAnnouncements(data);
     } catch (err: any) {
@@ -53,9 +52,7 @@ export default function AnnouncementsScreen() {
         onPress: async () => {
           try {
             await api.delete(`/announcements/${id}`);
-            setAnnouncements((prev) =>
-              prev.filter((a) => a.id !== id),
-            );
+            setAnnouncements((prev) => prev.filter((a) => a.id !== id));
           } catch (err: any) {
             console.log("DELETE ERROR:", err?.response?.data || err.message);
             Alert.alert("Delete failed");
@@ -82,35 +79,27 @@ export default function AnnouncementsScreen() {
           <Text style={styles.subtitle}>Broadcast updates to users</Text>
         </View>
 
-        <Pressable
-          style={styles.addBtn}
-          onPress={() => navigation.navigate("CreateAnnouncement")}
-        >
-          <Ionicons name="add" size={18} color="#fff" />
-        </Pressable>
-      </View>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <Pressable
+            style={styles.toggleBtn}
+            onPress={() =>
+              setViewMode((prev) => (prev === "card" ? "table" : "card"))
+            }
+          >
+            <Ionicons
+              name={viewMode === "card" ? "grid-outline" : "list-outline"}
+              size={18}
+              color="#fff"
+            />
+          </Pressable>
 
-      {/* TOGGLE */}
-      <View style={{ flexDirection: "row", marginBottom: 10 }}>
-        <Pressable
-          onPress={() => setViewMode("card")}
-          style={[
-            styles.toggleBtn,
-            viewMode === "card" && styles.activeToggle,
-          ]}
-        >
-          <Text style={{ color: "#fff" }}>Card</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => setViewMode("table")}
-          style={[
-            styles.toggleBtn,
-            viewMode === "table" && styles.activeToggle,
-          ]}
-        >
-          <Text style={{ color: "#fff" }}>Table</Text>
-        </Pressable>
+          <Pressable
+            style={styles.addBtn}
+            onPress={() => navigation.navigate("CreateAnnouncement")}
+          >
+            <Ionicons name="add" size={18} color="#fff" />
+          </Pressable>
+        </View>
       </View>
 
       {/* CONTENT */}
@@ -118,7 +107,39 @@ export default function AnnouncementsScreen() {
         <FlatList
           data={announcements}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={{
+            paddingBottom: 40,
+            flexGrow: 1,
+          }}
+          ListEmptyComponent={
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <EmptyState
+                icon="megaphone-outline"
+                title="No Announcements Yet"
+                message="Create your first announcement to keep users informed."
+              />
+
+              <Pressable
+                style={styles.createButton}
+                onPress={() => navigation.navigate("CreateAnnouncement")}
+              >
+                <Ionicons
+                  name="add-circle-outline"
+                  size={18}
+                  color="#fff"
+                  style={{ marginRight: 8 }}
+                />
+
+                <Text style={styles.createButtonText}>Create Announcement</Text>
+              </Pressable>
+            </View>
+          }
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.iconBox}>
@@ -251,12 +272,17 @@ const styles = StyleSheet.create({
 
   card: {
     flexDirection: "row",
-    backgroundColor: "#0f172a",
-    padding: 12,
-    borderRadius: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#1e293b",
+    backgroundColor: "#312e81",
+    padding: 14,
+    marginBottom: 16,
+
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 28,
+    borderBottomLeftRadius: 8,
+
+    borderWidth: 2,
+    borderColor: "#a855f7",
   },
 
   iconBox: {
@@ -351,5 +377,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  createButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#7c3aed",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 24,
+  },
+
+  createButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
   },
 });

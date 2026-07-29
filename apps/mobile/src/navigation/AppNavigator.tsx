@@ -4,10 +4,9 @@ import { RootStackParamList } from "./types";
 
 import LoginScreen from "../screens/auth/LoginScreen";
 import AdminDashboard from "../screens/admin/AdminDashboard";
-import TechnicianDashboard from "../screens/technician/TechnicianDashboard";
+import TechnicianNavigator from "./TechnicianNavigator";
 import LoadingScreen from "../screens/auth/LoadingScreen";
 
-import CreateRequestScreen from "../screens/customer/CreateRequestScreen";
 import RequestsScreen from "../screens/admin/RequestsScreen";
 import AssignTechnicianScreen from "../screens/admin/AssignTechnicianScreen";
 import RequestDetailScreen from "../screens/admin/RequestDetailScreen";
@@ -16,11 +15,7 @@ import TechnicianWorkloadScreen from "../screens/admin/TechnicianWorkloadScreen"
 import JobsScreen from "../screens/technician/JobsScreen";
 import SubmitReportScreen from "../screens/technician/SubmitReportScreen";
 
-import MyRequestsScreen from "../screens/customer/MyRequestsScreen";
-import ReportScreen from "../screens/customer/ReportScreen";
-import ProductDetailScreen from "../screens/customer/ProductDetailScreen";
-
-import CustomerTabs from "./CustomerTabs";
+import CustomerNavigator from "./CustomerNavigator";
 import OnboardingScreen from "../screens/onboarding/OnboardingScreen";
 
 import UsersScreen from "../screens/admin/UsersScreen";
@@ -46,8 +41,15 @@ import EditCompanyScreen from "../screens/admin/EditCompanyScreen";
 import ProductDetailsScreen from "../screens/admin/ProductDetailsScreen";
 import PlansScreen from "../screens/customer/PlansScreen";
 import MySubscriptionScreen from "../screens/customer/MySubscriptionScreen";
+import MaintenanceHistoryScreen from "../screens/customer/MaintenanceHistoryScreen";
+import MaintenanceVisitDetailsScreen from "../screens/customer/MaintenanceVisitDetailsScreen";
 import CompanyDetailsScreen from "../screens/admin/CompanyDetailsScreen";
 import UserDetailsScreen from "../screens/admin/UserDetailsScreen";
+import ReportDetailsScreen from "../screens/admin/ReportDetailsScreen";
+import CreateSubscriptionScreen from "../screens/admin/CreateSubscriptionScreen";
+import RecordPaymentScreen from "../screens/admin/RecordPaymentScreen";
+import PaymentDetailScreen from "../screens/admin/PaymentDetailScreen";
+import ReceiptScreen from "../screens/admin/ReceiptScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -81,6 +83,42 @@ export default function AppNavigator() {
         <Stack.Screen name="EditEquipment" component={EditEquipmentScreen} />
         <Stack.Screen name="CompanyDetails" component={CompanyDetailsScreen} />
         <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
+        <Stack.Screen name="ReportDetails" component={ReportDetailsScreen} />
+        <Stack.Screen
+          name="CreateSubscription"
+          component={CreateSubscriptionScreen}
+        />
+        <Stack.Screen
+          name="RecordPayment"
+          component={RecordPaymentScreen}
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="MaintenanceVisitDetails"
+          component={MaintenanceVisitDetailsScreen}
+        />
+
+        <Stack.Screen
+          name="PaymentDetail"
+          component={PaymentDetailScreen}
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="Receipt"
+          component={ReceiptScreen}
+          options={{
+            headerShown: false,
+          }}
+        />
+
+        <Stack.Screen
+          name="MaintenanceHistory"
+          component={MaintenanceHistoryScreen}
+        />
 
         <Stack.Screen
           name="EditAnnouncement"
@@ -114,24 +152,12 @@ export default function AppNavigator() {
           name="TechnicianWorkload"
           component={TechnicianWorkloadScreen}
         />
-        <Stack.Screen name="Technician" component={TechnicianDashboard} />
+        <Stack.Screen name="Technician" component={TechnicianNavigator} />
         <Stack.Screen name="Jobs" component={JobsScreen} />
         <Stack.Screen name="SubmitReport" component={SubmitReportScreen} />
-        <Stack.Screen name="Customer" component={CustomerTabs} />
-        <Stack.Screen name="MyRequests" component={MyRequestsScreen} />
-        <Stack.Screen name="CreateRequest" component={CreateRequestScreen} />
-        <Stack.Screen name="Report" component={ReportScreen} />
+        <Stack.Screen name="Customer" component={CustomerNavigator} />
+
         <Stack.Screen name="Payments" component={PaymentsScreen} />
-        <Stack.Screen
-          name="ProductDetail"
-          component={ProductDetailScreen}
-          options={{
-            headerShown: true,
-            title: "Product Details",
-            headerStyle: { backgroundColor: "#020617" },
-            headerTintColor: "#fff",
-          }}
-        />
       </Stack.Navigator>
     </NavigationContainer>
   );

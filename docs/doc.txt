@@ -166,3 +166,25 @@ This is the **core data structure of the platform**.
 ---
 
 If you want, I can show you the **complete production-ready Prisma schema for this system**, which avoids redesign later when the project grows.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+TARGETS TO IMPPLEMENT 
+Request Details screen – tapping a request opens a detailed view with photos, technician assignment, status timeline, and eventually the report.
+Equipment Details screen – tapping an equipment card opens its maintenance history, warranty, past requests, and reports.
+Notifications – alerts when a technician is assigned, a report is submitted, or a subscription is nearing expiry.
+Subscription experience – build out MySubscriptionScreen with plan status, renewal date, benefits, payment history, and upgrade/renew options.
+Help center – expand it with FAQ search, contact methods, and issue reporting.

@@ -13,49 +13,57 @@ enum Role {
 }
 
 model User {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name         String
-  email        String   @unique
+  email        String  @unique
+  phone        String?
+  profileImage String?
   passwordHash String
   role         Role
-  createdAt    DateTime @default(now())
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
 
   companyId String?  @db.Uuid
   company   Company? @relation(fields: [companyId], references: [id])
 
+  // Customer requests
+  serviceRequests ServiceRequest[]
+
+  // Technician's preventive maintenance schedule
+  assignedMaintenanceVisits MaintenanceVisit[] @relation("TechnicianMaintenanceVisits")
+  maintenanceVisits         MaintenanceVisit[]
+  subscriptions             Subscription[]
+
   assignments        ServiceAssignment[]   @relation("TechnicianAssignments")
   availableEquipment UserEquipmentAccess[]
-  activityLogs ActivityLog[]
+  activityLogs       ActivityLog[]
+  payments           Payment[]
 }
 
 model Company {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name      String
-
-  logoUrl   String?
-
-  email     String?
-  address   String?
-  phone     String?
-
-  contactName     String?
-  contactEmail    String?
-  contactPhone    String?
-  contactPosition String?
-
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String
+  logoUrl            String?
+  email              String?
+  address            String?
+  phone              String?
+  contactName        String?
+  contactEmail       String?
+  contactPhone       String?
+  contactPosition    String?
   escalatingName     String?
   escalatingEmail    String?
   escalatingPhone    String?
   escalatingPosition String?
-
-  createdAt DateTime @default(now())
-
-  subscriptions Subscription[]
-
-  users           User[]
-  equipment       Equipment[]
-  serviceRequests ServiceRequest[]
-  payments        Payment[]
+  createdAt          DateTime           @default(now())
+  subscriptions      Subscription[]
+  maintenanceVisits  MaintenanceVisit[]
+  users              User[]
+  equipment          Equipment[]
+  serviceRequests    ServiceRequest[]
+  payments           Payment[]
 }
 
 model Equipment {
@@ -71,9 +79,19 @@ model Equipment {
   company   Company @relation(fields: [companyId], references: [id])
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  // Preventive maintenance
+  subscriptions     Subscription[]
+  maintenanceVisits MaintenanceVisit[]
+
+  // Service requests
   serviceRequests ServiceRequest[]
-  assignedUsers   UserEquipmentAccess[]
+
+  payments Payment[]
+
+  // Equipment access
+  assignedUsers UserEquipmentAccess[]
 }
 
 model UserEquipmentAccess {
@@ -96,9 +114,13 @@ model ServiceRequest {
   createdAt   DateTime @default(now())
   type        String   @default("manual")
 
-  // ✅ NEW (soft delete / hide)
-  isHiddenByUser Boolean  @default(false)
+  // Soft delete
+  isHiddenByUser Boolean   @default(false)
   hiddenAt       DateTime?
+
+  // Customer who created the request
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
 
   companyId String  @db.Uuid
   company   Company @relation(fields: [companyId], references: [id])
@@ -106,14 +128,17 @@ model ServiceRequest {
   equipmentId String    @db.Uuid
   equipment   Equipment @relation(fields: [equipmentId], references: [id])
 
+  // Link to preventive maintenance visit (optional)
+  maintenanceVisitId String?           @unique @db.Uuid
+  maintenanceVisit   MaintenanceVisit? @relation(fields: [maintenanceVisitId], references: [id])
+
   assignment ServiceAssignment?
   report     ServiceReport?
 
-  imageUrl String? // keep temporarily (legacy)
-  images ServiceRequestImage[] 
-  events ServiceRequestEvent[]
+  imageUrl String?
+  images   ServiceRequestImage[]
+  events   ServiceRequestEvent[]
 }
-
 
 model ServiceAssignment {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -127,9 +152,28 @@ model ServiceAssignment {
 }
 
 model ServiceReport {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  notes     String?
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // Inspection
+  findings        String?
+  rootCause       String?
+  workPerformed   String?
+  recommendations String?
+
+  // Completion Checklist
+  equipmentTested  Boolean @default(false)
+  operational      Boolean @default(false)
+  customerInformed Boolean @default(false)
+  areaCleaned      Boolean @default(false)
+  safetyChecks     Boolean @default(false)
+  customerAccepted Boolean @default(false)
+
+  // Time Tracking
+  startedAt   DateTime?
+  completedAt DateTime?
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   serviceRequestId String         @unique @db.Uuid
   serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id])
@@ -152,7 +196,7 @@ model Product {
   price       Float?
 
   // 🔥 MULTIPLE IMAGES
-  images      String[]
+  images String[]
 
   inStock  Boolean @default(true)
   quantity Int     @default(0)
@@ -172,61 +216,131 @@ model Announcement {
 }
 
 model Plan {
-  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name           String
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  name String
+
   intervalMonths Int
-  description    String?
+
+  description String?
+
+  // Display name shown in the app
+  displayName String?
+
+  // Monthly, Quarterly, Half-Yearly, Yearly
+  frequency String
+
+  // Number of visits included per billing cycle
+  visitsPerCycle Int @default(1)
+
+  // Plan price
+  price Float
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   subscriptions Subscription[]
+  payments      Payment[]
 }
 
 model Subscription {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
-  companyId String @db.Uuid
-  planId    String @db.Uuid // ✅ FIXED
+  userId      String @db.Uuid
+  companyId   String @db.Uuid
+  equipmentId String @db.Uuid
+  planId      String @db.Uuid
 
-  startDate        DateTime @default(now())
-  currentPeriodEnd DateTime // ✅ ADD THIS
-  nextVisitDate    DateTime
-  status           String
+  startDate DateTime @default(now())
+
+  currentPeriodStart DateTime @default(now())
+  currentPeriodEnd   DateTime
+
+  nextVisitDate DateTime
+  lastVisitDate DateTime?
+
+  totalVisitsCompleted Int @default(0)
+
+  autoRenew Boolean @default(true)
+
+  status String @default("active")
+
+  // Cancellation
+  cancelledAt       DateTime?
+  cancelledReason   String?
+  cancellationNotes String?
+  cancelledById     String?   @db.Uuid
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company  Company   @relation(fields: [companyId], references: [id])
-  plan     Plan      @relation(fields: [planId], references: [id])
-  payments Payment[]
+  user      User      @relation(fields: [userId], references: [id])
+  company   Company   @relation(fields: [companyId], references: [id])
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+  plan      Plan      @relation(fields: [planId], references: [id])
+
+  payments          Payment[]
+  maintenanceVisits MaintenanceVisit[]
+
+  @@index([nextVisitDate])
 }
 
 model Payment {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
-  companyId      String @db.Uuid
-  subscriptionId String @db.Uuid
+  companyId String @db.Uuid
+
+  // What the customer is purchasing
+  equipmentId String @db.Uuid
+  planId      String @db.Uuid
+
+  // Linked after payment succeeds
+  subscriptionId String? @db.Uuid
 
   amount Float
-  status String // success | failed
-  method String? // card, cash, etc.
+
+  // pending | success | failed | refunded
+  status String @default("pending")
+
+  // card | bank_transfer | cash | upi | stripe | razorpay
+  method String?
+
+  // Payment gateway reference
+  transactionReference String?
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company      Company      @relation(fields: [companyId], references: [id])
-  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  paymentDate  DateTime      @default(now())
+
+  notes String?
+
+  recordedById String? @db.Uuid
+
+  recordedBy    User?   @relation(fields: [recordedById], references: [id])
+  receiptNumber String? @unique
+
+  @@index([companyId])
+  @@index([equipmentId])
+  @@index([planId])
+  @@index([subscriptionId])
+  @@index([status])
 }
-
-
 
 model Category {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String   @unique
   createdAt DateTime @default(now())
 
-  products  Product[]
+  products Product[]
 }
-
-
 
 model ServiceRequestImage {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -239,18 +353,91 @@ model ServiceRequestImage {
   @@index([requestId])
 }
 
-
-
 model ActivityLog {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String?  @db.Uuid
-  user      User?    @relation(fields: [userId], references: [id])
+  id     String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String? @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id])
 
-  action    String
-  entity    String
-  entityId  String?
+  action   String
+  entity   String
+  entityId String?
 
-  message   String
+  message String
+
+  createdAt DateTime @default(now())
+}
+
+model MaintenanceVisit {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  subscriptionId String @db.Uuid
+
+  companyId   String @db.Uuid
+  equipmentId String @db.Uuid
+
+  technicianId String? @db.Uuid
+  acceptedAt DateTime?
+
+  scheduledDate DateTime
+  completedAt   DateTime?
+
+ // scheduled | assigned | accepted | in_progress | completed | missed | cancelled
+status String @default("scheduled")
+
+  // Visit sequence within the subscription
+  visitNumber Int
+
+  notes      String?
+  assignedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+
+  technician User? @relation("TechnicianMaintenanceVisits", fields: [technicianId], references: [id])
+
+  serviceRequest ServiceRequest?
+  userId         String          @db.Uuid
+
+  user     User                 @relation(fields: [userId], references: [id])
+  findings MaintenanceFinding[]
+
+  @@unique([subscriptionId, visitNumber])
+  @@index([scheduledDate])
+  @@index([technicianId])
+  @@index([status])
+}
+
+model MaintenanceFinding {
+  id String @id @default(uuid()) @db.Uuid
+
+  maintenanceVisitId String           @db.Uuid
+  maintenanceVisit   MaintenanceVisit @relation(fields: [maintenanceVisitId], references: [id])
+
+  problem        String
+  cause          String?
+  condition      String?
+  recommendation String?
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  photos MaintenanceFindingImage[]
+}
+
+model MaintenanceFindingImage {
+  id String @id @default(uuid()) @db.Uuid
+
+  findingId String             @db.Uuid
+  finding   MaintenanceFinding @relation(fields: [findingId], references: [id])
+
+  url String
 
   createdAt DateTime @default(now())
 }

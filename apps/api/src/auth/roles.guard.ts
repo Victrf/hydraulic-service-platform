@@ -12,7 +12,7 @@ import { ROLES_KEY } from './roles.decorator';
 
 interface AuthenticatedRequest extends Request {
   user: {
-    userId: string;
+    sub: string;
     role: string;
   };
 }

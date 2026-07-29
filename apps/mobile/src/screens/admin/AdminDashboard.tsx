@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   Alert,
+  Image,
 } from "react-native";
 import { useEffect, useState, useCallback } from "react";
 import { api } from "../../api/client";
@@ -13,8 +14,9 @@ import {
   useNavigation,
   useRoute,
   useFocusEffect,
-} from "@react-navigation/native"; // ✅ added useRoute
+} from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
+import { socket } from "../../services/socket";
 
 export default function AdminDashboard() {
   const [requests, setRequests] = useState<any[]>([]);
@@ -38,11 +40,34 @@ export default function AdminDashboard() {
   });
 
   const navigation = useNavigation<any>();
-  const route = useRoute<any>(); // ✅ added
+  const route = useRoute<any>();
 
   useEffect(() => {
     loadSystemStats();
     loadRequestStats();
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => {
+      console.log("🔥 Dashboard refreshed");
+      refreshDashboard();
+    };
+
+    socket.on("request.created", refresh);
+    socket.on("request.updated", refresh);
+    socket.on("request.assigned", refresh);
+    socket.on("request.accepted", refresh);
+    socket.on("request.in-progress", refresh);
+    socket.on("request.completed", refresh);
+
+    return () => {
+      socket.off("request.created", refresh);
+      socket.off("request.updated", refresh);
+      socket.off("request.assigned", refresh);
+      socket.off("request.accepted", refresh);
+      socket.off("request.in-progress", refresh);
+      socket.off("request.completed", refresh);
+    };
   }, []);
 
   useEffect(() => {
@@ -57,18 +82,15 @@ export default function AdminDashboard() {
       setPage(1);
       setRequests([]);
       setHasMore(true);
-
       loadRequests(true);
       loadRequestStats();
-
-      navigation.setParams({ refresh: undefined }); // ✅ fix
+      navigation.setParams({ refresh: undefined });
     }
   }, [route.params?.refresh]);
 
   const updateStatus = async (id: string, status: string) => {
     try {
       await api.patch(`/service-requests/${id}/status`, { status });
-
       setPage(1);
       setRequests([]);
       loadRequests(true);
@@ -83,16 +105,13 @@ export default function AdminDashboard() {
       await api.post("/assignments/auto-assign", {
         serviceRequestId: id,
       });
-
       setPage(1);
       setRequests([]);
       loadRequests(true);
       loadRequestStats();
     } catch (err: any) {
       let message = err?.response?.data?.message || "Auto assign failed";
-
-      if (Array.isArray(message)) message = message[0]; // ✅ safe fix
-
+      if (Array.isArray(message)) message = message[0];
       console.log("AUTO ASSIGN ERROR:", message);
       Alert.alert("Error", message);
     }
@@ -101,23 +120,19 @@ export default function AdminDashboard() {
   const loadRequests = async (reset = false) => {
     try {
       const currentPage = reset ? 1 : page;
-
       const url = statusFilter
         ? `/service-requests?status=${statusFilter}&page=${currentPage}&limit=10`
         : `/service-requests?page=${currentPage}&limit=10`;
 
       const res = await api.get(url);
-
       const newData = res.data?.data || [];
       const meta = res.data?.meta;
 
       setRequests((prev) => {
         const combined = reset ? newData : [...prev, ...newData];
-
         const unique = Array.from(
           new Map(combined.map((item) => [item.id, item])).values(),
         );
-
         return unique;
       });
 
@@ -156,6 +171,17 @@ export default function AdminDashboard() {
     } catch (err) {
       console.log(err);
     }
+  };
+
+  const refreshDashboard = async () => {
+    setPage(1);
+    setRequests([]);
+    setHasMore(true);
+    await Promise.all([
+      loadRequests(true),
+      loadRequestStats(),
+      loadSystemStats(),
+    ]);
   };
 
   return (
@@ -264,47 +290,150 @@ export default function AdminDashboard() {
           </>
         }
         renderItem={({ item }) => (
-          <View
+          <Pressable
+            onPress={() =>
+              navigation.navigate("RequestDetail", {
+                id: item.id,
+              })
+            }
             style={[
               styles.card,
               !item.assignment && styles.unassignedCard,
               { marginHorizontal: 16 },
             ]}
           >
-            <Text style={styles.desc}>{item.description}</Text>
+            {/* HEADER */}
+            <View style={styles.cardHeader}>
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: getStatusColor(item.status) + "22" },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusBadgeText,
+                    { color: getStatusColor(item.status) },
+                  ]}
+                >
+                  {item.status.toUpperCase()}
+                </Text>
+              </View>
 
-            <Text style={styles.meta}>
-              {item.company?.name} • {item.equipment?.name}
-            </Text>
+              <Text style={styles.dateText}>
+                {new Date(item.createdAt).toLocaleDateString()}
+              </Text>
+            </View>
 
-            <Text
-              style={[styles.status, { color: getStatusColor(item.status) }]}
-            >
-              Status: {item.status}
-            </Text>
+            {/* COMPANY */}
+            <View style={styles.companySection}>
+              <Image
+                source={{
+                  uri: item.company?.logoUrl
+                    ? `${api.defaults.baseURL}/uploads/companies/${item.company.logoUrl}`
+                    : "https://placehold.co/60x60",
+                }}
+                style={styles.companyLogo}
+              />
 
-            <Text style={styles.meta}>
-              {item.assignment
-                ? `Assigned to ${item.assignment.technician?.name}`
-                : "⚠ Unassigned"}
-            </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.companyName}>{item.company?.name}</Text>
 
-            <View style={styles.actions}>
+                <Text style={styles.companyMeta}>{item.equipment?.name}</Text>
+
+                {!!item.location && (
+                  <Text style={styles.companyLocation}>{item.location}</Text>
+                )}
+              </View>
+            </View>
+
+            {/* CUSTOMER ISSUE */}
+            <View style={styles.issueCard}>
+              <Text style={styles.sectionLabel}>Customer Issue</Text>
+
+              <Text style={styles.issueText} numberOfLines={3}>
+                {item.description}
+              </Text>
+            </View>
+
+            {/* TECHNICIAN - NOW ON THE RIGHT */}
+            <View style={styles.techSection}>
+              <View style={styles.techRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sectionLabel}>Technician</Text>
+                  {item.assignment ? (
+                    <>
+                      <Text style={styles.techName}>
+                        {item.assignment.technician?.name}
+                      </Text>
+                      <Text style={styles.techRole}>
+                        {item.assignment.technician?.role || "Technician"}
+                      </Text>
+                    </>
+                  ) : (
+                    <View style={styles.unassignedBox}>
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={18}
+                        color="#f59e0b"
+                      />
+                      <Text style={styles.unassignedText}>Not assigned</Text>
+                    </View>
+                  )}
+                </View>
+
+                {item.assignment ? (
+                  <Image
+                    source={{
+                      uri: item.assignment?.technician?.profileImage
+                        ? `${api.defaults.baseURL}/uploads/users/${item.assignment.technician.profileImage}`
+                        : "https://placehold.co/80x80",
+                    }}
+                    style={styles.techAvatar}
+                  />
+                ) : (
+                  <View style={styles.techAvatarFallback}>
+                    <Ionicons name="person-outline" size={24} color="#64748b" />
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* ACTIONS - STACKED IN ONE COLUMN */}
+            {/* ACTIONS - HORIZONTAL ROW */}
+            <View style={styles.footer}>
+              <Pressable
+                style={styles.viewBtn}
+                onPress={() =>
+                  navigation.navigate("RequestDetail", {
+                    id: item.id,
+                  })
+                }
+              >
+                <Ionicons name="eye-outline" size={18} color="#fff" />
+                <Text style={styles.viewBtnText}>View</Text>
+              </Pressable>
+
               {!item.assignment ? (
                 <>
                   <Pressable
-                    style={styles.primaryBtn}
+                    style={styles.actionBtn}
                     onPress={() =>
                       navigation.navigate("TechnicianWorkload", {
                         requestId: item.id,
                       })
                     }
                   >
-                    <Text style={{ color: "#fff" }}>Assign</Text>
+                    <Ionicons
+                      name="person-add-outline"
+                      size={18}
+                      color="#fff"
+                    />
+                    <Text style={styles.actionBtnText}>Assign</Text>
                   </Pressable>
 
                   <Pressable
-                    style={styles.secondaryBtn}
+                    style={styles.autoBtn}
                     onPress={() =>
                       Alert.alert(
                         "Auto Assign",
@@ -319,52 +448,29 @@ export default function AdminDashboard() {
                       )
                     }
                   >
-                    <Text style={{ color: "#22c55e" }}>Auto</Text>
+                    <Ionicons name="flash-outline" size={18} color="#22c55e" />
+                    <Text style={styles.autoBtnText}>Auto</Text>
                   </Pressable>
                 </>
               ) : (
                 <Pressable
-                  style={styles.primaryBtn}
+                  style={styles.actionBtn}
                   onPress={() =>
-                    Alert.alert(
-                      "Reassign Technician",
-                      "Change the assigned technician?",
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Continue",
-                          onPress: () =>
-                            navigation.navigate("TechnicianWorkload", {
-                              requestId: item.id,
-                            }),
-                        },
-                      ],
-                    )
+                    navigation.navigate("TechnicianWorkload", {
+                      requestId: item.id,
+                    })
                   }
                 >
-                  <Text style={{ color: "#fff" }}>Reassign</Text>
-                </Pressable>
-              )}
-
-              {item.status === "pending" && (
-                <Pressable
-                  style={styles.secondaryBtn}
-                  onPress={() => updateStatus(item.id, "in-progress")}
-                >
-                  <Text style={{ color: "#60a5fa" }}>Start</Text>
-                </Pressable>
-              )}
-
-              {item.status === "in-progress" && (
-                <Pressable
-                  style={styles.secondaryBtn}
-                  onPress={() => updateStatus(item.id, "completed")}
-                >
-                  <Text style={{ color: "#10b981" }}>Complete</Text>
+                  <Ionicons
+                    name="swap-horizontal-outline"
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={styles.actionBtnText}>Reassign</Text>
                 </Pressable>
               )}
             </View>
-          </View>
+          </Pressable>
         )}
         ListFooterComponent={
           requests.length === 0 ? (
@@ -378,6 +484,7 @@ export default function AdminDashboard() {
     </View>
   );
 }
+
 /* COMPONENTS */
 
 const KPI = ({ label, value }: any) => {
@@ -511,17 +618,243 @@ const styles = StyleSheet.create({
 
   activeFilter: { backgroundColor: "#7c3aed" },
 
+  /* ============================================
+     ENHANCED CARD STYLES
+  ============================================ */
+
   card: {
-    backgroundColor: "#0f172a",
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 16,
+    backgroundColor: "#111827",
+    borderRadius: 24,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: "#1e293b",
+    overflow: "hidden",
+    // Subtle shadow for depth
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
 
   unassignedCard: {
     borderColor: "#ef4444",
+    shadowColor: "#ef4444",
+    shadowOpacity: 0.15,
+  },
+
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
+
+  statusBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+
+  dateText: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+
+  /* COMPANY */
+
+  companySection: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+  },
+
+  companyLogo: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "#1e293b",
+    marginRight: 14,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+
+  companyName: {
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "700",
+  },
+
+  companyMeta: {
+    color: "#94a3b8",
+    marginTop: 3,
+    fontSize: 13,
+  },
+
+  companyLocation: {
+    color: "#64748b",
+    marginTop: 3,
+    fontSize: 12,
+  },
+
+  /* ISSUE */
+
+  issueCard: {
+    backgroundColor: "#0f172a",
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: "#1e293b",
+  },
+
+  issueText: {
+    color: "#cbd5e1",
+    fontSize: 14,
+    lineHeight: 22,
+  },
+
+  /* TECHNICIAN - RIGHT ALIGNED */
+
+  techSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+  },
+
+  techRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  techAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#1e293b",
+    borderWidth: 2,
+    borderColor: "#334155",
+  },
+
+  techAvatarFallback: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#1e293b",
+    borderWidth: 2,
+    borderColor: "#334155",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  techName: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  techRole: {
+    color: "#94a3b8",
+    marginTop: 2,
+    fontSize: 12,
+  },
+
+  unassignedBox: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  unassignedText: {
+    color: "#f59e0b",
+    marginLeft: 8,
+    fontWeight: "600",
+    fontSize: 13,
+  },
+
+  /* ACTIONS - STACKED COLUMN */
+
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: "#1e293b",
+    padding: 20,
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+  },
+
+  viewBtn: {
+    backgroundColor: "#2563eb",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    flex: 1,
+  },
+
+  viewBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+
+  actionBtn: {
+    backgroundColor: "#7c3aed",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    flex: 1,
+  },
+
+  actionBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+
+  autoBtn: {
+    backgroundColor: "transparent",
+    borderWidth: 1.5,
+    borderColor: "#22c55e",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    flex: 1,
+  },
+
+  autoBtnText: {
+    color: "#22c55e",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  sectionLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 
   desc: { color: "#fff", fontWeight: "600" },

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { AssignmentsModule } from './assignments/assignments.module';
@@ -8,6 +9,8 @@ import { ReportsModule } from './reports/reports.module';
 import { EquipmentModule } from './equipment/equipment.module';
 import { ProductsModule } from './products/products.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
+import { MaintenanceVisitsModule } from './maintenance-visits/maintenance-visits.module';
+import { MaintenanceFindingsModule } from './maintenance-findings/maintenance-findings.module';
 
 // ✅ SUBSCRIPTIONS
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
@@ -41,11 +44,15 @@ import { CacheModule } from '@nestjs/cache-manager';
 // ✅ PLANS
 import { PlansModule } from './plans/plans.module';
 
-// ✅ ADD THIS IMPORT
+// ✅ TECHNICIANS
 import { TechniciansModule } from './technicians/technicians.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     // ✅ CRON
     ScheduleModule.forRoot(),
 
@@ -53,7 +60,7 @@ import { TechniciansModule } from './technicians/technicians.module';
     ThrottlerModule.forRoot({
       throttlers: [
         {
-          ttl: 60,
+          ttl: 60000, // 60 seconds in milliseconds
           limit: 20,
         },
       ],
@@ -83,14 +90,22 @@ import { TechniciansModule } from './technicians/technicians.module';
     EquipmentModule,
     ProductsModule,
     AnnouncementsModule,
-    SubscriptionsModule,
-    PaymentsModule,
-    NotificationsModule,
-    PlansModule,
-    CompaniesModule,
 
-    // ✅ THIS FIXES YOUR ISSUE
+    // ✅ Business Modules
+    CompaniesModule,
+    PlansModule,
+    PaymentsModule,
+    SubscriptionsModule,
+    MaintenanceVisitsModule,
+    MaintenanceFindingsModule,
+
+    // ✅ Notifications
+    NotificationsModule,
+
+    // ✅ Technician Management
     TechniciansModule,
+
+    MailModule,
   ],
 
   controllers: [CategoriesController],

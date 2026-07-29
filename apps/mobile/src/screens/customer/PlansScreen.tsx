@@ -4,291 +4,908 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  ImageBackground,
+  Animated,
+  Dimensions,
+  StatusBar,
 } from "react-native";
-import { useRoute, useNavigation } from "@react-navigation/native";
-import { useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import { useState, useEffect, useRef } from "react";
+import { Alert, Linking } from "react-native";
+import { api } from "../../api/client";
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+  FontAwesome5,
+} from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+
+const { width } = Dimensions.get("window");
 
 export default function PlansScreen() {
-  const route = useRoute();
   const navigation = useNavigation();
-
-  const { plans = [] } = route.params || {};
-
+  const [plans, setPlans] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
 
-  const handleContinue = () => {
-    if (!selectedPlan) return;
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const scaleAnims = useRef<Animated.Value[]>([]);
 
-    navigation.navigate("MySubscription", {
-      subscription: { plan: selectedPlan },
-    });
-  };
+  useEffect(() => {
+    loadPlans();
 
-  const getPlanDescription = (plan: any) => {
-    if (!plan) return "";
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+  const ADMIN_PHONE = "+918095994004";
 
-    switch (plan.intervalMonths) {
-      case 1:
-        return "Best for short-term needs. Includes one scheduled maintenance visit per month.";
-      case 3:
-        return "Balanced option for regular usage. Includes periodic maintenance and inspection support.";
-      case 6:
-        return "Ideal for long-term reliability. Covers scheduled maintenance visits and priority service support.";
-      default:
-        return "Includes scheduled maintenance and service support.";
+  const loadPlans = async () => {
+    try {
+      const res = await api.get("/plans");
+      setPlans(res.data);
+      scaleAnims.current = res.data.map(() => new Animated.Value(1));
+    } catch (err) {
+      console.log("PLAN ERROR:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleContinue = () => {
+    if (!selectedPlan) return;
+    Alert.alert(
+      "Contact Admin",
+      `You have selected the "${selectedPlan.name}" plan.\n\nCall the administrator to subscribe?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Call Admin",
+          onPress: () => Linking.openURL(`tel:${ADMIN_PHONE}`),
+        },
+      ],
+    );
+  };
+
+  const getPlanMeta = (plan: any) => {
+    const configs: Record<
+      number,
+      { icon: string; features: string[]; gradient: string[]; tag: string }
+    > = {
+      1: {
+        icon: "bolt",
+        features: ["1 Visit/Month", "Basic Support", "Email Reports"],
+        gradient: ["#7c3aed", "#a855f7"],
+        tag: "Starter",
+      },
+      3: {
+        icon: "shield-alt",
+        features: [
+          "1 Visit/Quarter",
+          "Priority Support",
+          "Detailed Reports",
+          "Discounted Parts",
+        ],
+        gradient: ["#3b82f6", "#06b6d4"],
+        tag: "Popular",
+      },
+      6: {
+        icon: "crown",
+        features: [
+          "1 Visit/Half-Year",
+          "24/7 Priority",
+          "Full Diagnostics",
+          "Free Parts",
+          "Dedicated Manager",
+        ],
+        gradient: ["#f59e0b", "#ef4444"],
+        tag: "Premium",
+      },
+    };
+    return (
+      configs[plan.intervalMonths] || {
+        icon: "tools",
+        features: ["Scheduled Maintenance", "Service Support"],
+        gradient: ["#64748b", "#94a3b8"],
+        tag: "Standard",
+      }
+    );
+  };
+
+  const getPlanDescription = (plan: any) => {
+    const descs: Record<number, string> = {
+      1: "Perfect for light usage. One professional maintenance visit every month to keep your equipment running smoothly.",
+      3: "Our most balanced option. Quarterly inspections with priority scheduling and comprehensive reporting.",
+      6: "Maximum protection for critical equipment. Bi-annual deep maintenance with all premium perks included.",
+    };
+    return (
+      descs[plan.intervalMonths] ||
+      "Professional maintenance and service support tailored to your needs."
+    );
+  };
+
+  const handlePressIn = (index: number) => {
+    Animated.spring(scaleAnims.current[index], {
+      toValue: 0.97,
+      useNativeDriver: true,
+      friction: 8,
+    }).start();
+  };
+
+  const handlePressOut = (index: number) => {
+    Animated.spring(scaleAnims.current[index], {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 8,
+    }).start();
+  };
+
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#020617",
+        }}
+      >
+        <Text style={{ color: "#fff" }}>Loading Plans...</Text>
+      </View>
+    );
+  }
+
   return (
-    <ImageBackground
-      source={{
-        uri: "https://images.unsplash.com/photo-1668455199701-284281127a87?w=600&auto=format&fit=crop&q=60",
-      }}
-      style={styles.bg}
-      resizeMode="cover"
-    >
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          <ScrollView contentContainerStyle={styles.scrollContent}>
-            {/* HEADER */}
-            <View style={styles.header}>
-              <Text style={styles.title}>Choose AMC Plan </Text>
-              <Text style={styles.subtitle}>
-                Select a plan that fits your usage and maintenance needs
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" />
+
+      {/* Animated Background */}
+      <LinearGradient
+        colors={["#0f172a", "#1e1b4b", "#0f172a"]}
+        style={styles.backgroundGradient}
+      />
+
+      {/* Decorative Orbs */}
+      <View style={[styles.orb, styles.orb1]} />
+      <View style={[styles.orb, styles.orb2]} />
+
+      <View style={styles.container}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Animated Header */}
+          <Animated.View
+            style={[
+              styles.header,
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            ]}
+          >
+            <View style={styles.headerBadge}>
+              <MaterialCommunityIcons
+                name="shield-check"
+                size={14}
+                color="#a78bfa"
+              />
+              <Text style={styles.headerBadgeText}>
+                Annual Maintenance Contract
               </Text>
             </View>
+            <Text style={styles.title}>Choose Your Plan</Text>
+            <Text style={styles.subtitle}>
+              Select a maintenance plan that matches your equipment needs and
+              budget
+            </Text>
+          </Animated.View>
 
-            {/* PLANS */}
-            {plans.map((plan: any) => {
-              const isSelected = selectedPlan?.id === plan.id;
+          {/* Plan Cards */}
+          {plans.map((plan: any, index: number) => {
+            const isSelected = selectedPlan?.id === plan.id;
+            const meta = getPlanMeta(plan);
+            const monthlyPrice = Math.round(plan.price / plan.intervalMonths);
 
-              return (
+            return (
+              <Animated.View
+                key={plan.id}
+                style={{
+                  transform: [
+                    {
+                      scale: scaleAnims.current[index] ?? new Animated.Value(1),
+                    },
+                  ],
+                  opacity: fadeAnim,
+                }}
+              >
                 <Pressable
-                  key={plan.id}
                   onPress={() => setSelectedPlan(plan)}
-                  style={[styles.card, isSelected && styles.cardSelected]}
+                  onPressIn={() => handlePressIn(index)}
+                  onPressOut={() => handlePressOut(index)}
+                  style={({ pressed }) => [
+                    styles.card,
+                    isSelected && [
+                      styles.cardSelected,
+                      {
+                        borderColor: meta.gradient[0] + "66",
+                        shadowColor: meta.gradient[0],
+                      },
+                    ],
+                    pressed && !isSelected && styles.cardPressed,
+                  ]}
                 >
-                  <View style={styles.cardTop}>
-                    <View>
-                      <Text style={styles.planName}>{plan.name}</Text>
-                      <Text style={styles.planDuration}>
-                        {plan.intervalMonths} Month Plan
-                      </Text>
+                  {/* Selection Indicator */}
+                  {isSelected && (
+                    <LinearGradient
+                      colors={meta.gradient}
+                      style={styles.selectedIndicator}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    />
+                  )}
+
+                  <View style={styles.cardContent}>
+                    {/* Top Row */}
+                    <View style={styles.cardTop}>
+                      <View style={styles.planIdentity}>
+                        <View
+                          style={[
+                            styles.iconContainer,
+                            {
+                              backgroundColor: isSelected
+                                ? meta.gradient[0] + "20"
+                                : "rgba(255,255,255,0.05)",
+                            },
+                          ]}
+                        >
+                          <FontAwesome5
+                            name={meta.icon}
+                            size={18}
+                            color={isSelected ? meta.gradient[0] : "#94a3b8"}
+                          />
+                        </View>
+                        <View>
+                          <View style={styles.nameRow}>
+                            <Text
+                              style={[
+                                styles.planName,
+                                isSelected && styles.planNameSelected,
+                              ]}
+                            >
+                              {plan.name}
+                            </Text>
+                            {meta.tag && (
+                              <View
+                                style={[
+                                  styles.tag,
+                                  { backgroundColor: meta.gradient[0] + "20" },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.tagText,
+                                    { color: meta.gradient[0] },
+                                  ]}
+                                >
+                                  {meta.tag}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.planDuration}>
+                            {plan.intervalMonths}{" "}
+                            {plan.intervalMonths === 1 ? "Month" : "Months"}{" "}
+                            Duration
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Price */}
+                      <View style={styles.priceContainer}>
+                        <Text style={styles.priceSymbol}>₹</Text>
+                        <Text
+                          style={[
+                            styles.price,
+                            isSelected && styles.priceSelected,
+                          ]}
+                        >
+                          {plan.price ?? "--"}
+                        </Text>
+                      </View>
                     </View>
 
-                    <Text style={styles.price}>₹{plan.price ?? "--"}</Text>
+                    {/* Divider */}
+                    <View
+                      style={[
+                        styles.divider,
+                        isSelected && {
+                          backgroundColor: meta.gradient[0] + "30",
+                        },
+                      ]}
+                    />
+
+                    {/* Features */}
+                    <View style={styles.featuresRow}>
+                      {meta.features.map((feature: string, i: number) => (
+                        <View key={i} style={styles.featureChip}>
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={12}
+                            color={isSelected ? meta.gradient[0] : "#64748b"}
+                          />
+                          <Text
+                            style={[
+                              styles.featureText,
+                              isSelected && { color: "#e2e8f0" },
+                            ]}
+                          >
+                            {feature}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+
+                    {/* Monthly Equivalent */}
+                    <View style={styles.monthlyRow}>
+                      <Ionicons
+                        name="trending-down"
+                        size={12}
+                        color="#64748b"
+                      />
+                      <Text style={styles.monthlyText}>
+                        Equivalent to ₹{monthlyPrice}/month
+                      </Text>
+                    </View>
                   </View>
 
-                  {isSelected && <View style={styles.selectedBar} />}
+                  {/* Selected Checkmark */}
+                  {isSelected && (
+                    <View style={styles.checkmarkContainer}>
+                      <LinearGradient
+                        colors={meta.gradient}
+                        style={styles.checkmarkGradient}
+                      >
+                        <Ionicons name="checkmark" size={16} color="#fff" />
+                      </LinearGradient>
+                    </View>
+                  )}
                 </Pressable>
-              );
-            })}
+              </Animated.View>
+            );
+          })}
 
-            {!plans.length && (
+          {!plans.length && (
+            <View style={styles.emptyState}>
+              <MaterialCommunityIcons
+                name="package-variant"
+                size={48}
+                color="#334155"
+              />
               <Text style={styles.emptyText}>No plans available</Text>
-            )}
+              <Text style={styles.emptySubtext}>
+                Check back later for new subscription options
+              </Text>
+            </View>
+          )}
 
-            {/* 🔥 PREVIEW SECTION (fills your red area) */}
-            {selectedPlan && (
-              <View style={styles.previewSection}>
-                <View style={styles.previewCard}>
+          {/* Selected Plan Details Preview */}
+          {selectedPlan && (
+            <Animated.View
+              style={[styles.previewSection, { opacity: fadeAnim }]}
+            >
+              <View style={styles.previewHeader}>
+                <View style={styles.previewLine} />
+                <Text style={styles.previewLabel}>Plan Details</Text>
+                <View style={styles.previewLine} />
+              </View>
+
+              <View style={styles.previewCard}>
+                <LinearGradient
+                  colors={getPlanMeta(selectedPlan).gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.previewAccent}
+                />
+                <View style={styles.previewContent}>
                   <Text style={styles.previewTitle}>{selectedPlan.name}</Text>
-
-                  <Text style={styles.previewText}>
+                  <Text style={styles.previewDescription}>
                     {getPlanDescription(selectedPlan)}
                   </Text>
+
+                  <View style={styles.benefitsGrid}>
+                    <BenefitItem
+                      icon="calendar-check"
+                      label="Visits"
+                      value={`${selectedPlan.intervalMonths}x`}
+                      color={getPlanMeta(selectedPlan).gradient[0]}
+                    />
+                    <BenefitItem
+                      icon="headset"
+                      label="Support"
+                      value="Included"
+                      color={getPlanMeta(selectedPlan).gradient[0]}
+                    />
+                    <BenefitItem
+                      icon="file-document"
+                      label="Reports"
+                      value="Detailed"
+                      color={getPlanMeta(selectedPlan).gradient[0]}
+                    />
+                  </View>
                 </View>
               </View>
-            )}
-          </ScrollView>
+            </Animated.View>
+          )}
+        </ScrollView>
 
-          {/* FOOTER (UNCHANGED — still has description) */}
-          <View style={styles.footer}>
-            {selectedPlan && (
-              <View style={styles.descriptionBox}>
-                <Text style={styles.descriptionTitle}>{selectedPlan.name}</Text>
-
-                <Text style={styles.descriptionText}>
-                  {getPlanDescription(selectedPlan)}
+        {/* Sticky Footer */}
+        <View style={styles.footer}>
+          {selectedPlan && (
+            <View style={styles.footerSummary}>
+              <View style={styles.footerSummaryLeft}>
+                <Text style={styles.footerPlanName}>{selectedPlan.name}</Text>
+                <Text style={styles.footerPlanPrice}>
+                  ₹{selectedPlan.price}
                 </Text>
               </View>
-            )}
+              <View style={styles.footerDivider} />
+            </View>
+          )}
 
-            <Pressable
-              onPress={handleContinue}
-              style={[styles.button, !selectedPlan && styles.buttonDisabled]}
+          <Pressable
+            onPress={handleContinue}
+            style={({ pressed }) => [
+              styles.button,
+              !selectedPlan && styles.buttonDisabled,
+              pressed && selectedPlan && styles.buttonPressed,
+            ]}
+          >
+            <LinearGradient
+              colors={
+                selectedPlan
+                  ? getPlanMeta(selectedPlan).gradient
+                  : ["#374151", "#4b5563"]
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.buttonGradient}
             >
               <Text style={styles.buttonText}>
-                {selectedPlan ? "Continue" : "Select a plan"}
+                {selectedPlan ? "Subscribe Now" : "Select a Plan"}
               </Text>
-            </Pressable>
-          </View>
+              {selectedPlan && (
+                <Ionicons
+                  name="arrow-forward"
+                  size={18}
+                  color="#fff"
+                  style={styles.buttonIcon}
+                />
+              )}
+            </LinearGradient>
+          </Pressable>
         </View>
       </View>
-    </ImageBackground>
+    </View>
+  );
+}
+
+function BenefitItem({
+  icon,
+  label,
+  value,
+  color,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  color: string;
+}) {
+  return (
+    <View style={styles.benefitItem}>
+      <View style={[styles.benefitIcon, { backgroundColor: color + "15" }]}>
+        <MaterialCommunityIcons name={icon as any} size={20} color={color} />
+      </View>
+      <Text style={styles.benefitValue}>{value}</Text>
+      <Text style={styles.benefitLabel}>{label}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
-
-  overlay: {
+  root: {
     flex: 1,
-    backgroundColor: "rgba(2,6,23,0.85)",
+    backgroundColor: "#020617",
   },
-
+  backgroundGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  orb: {
+    position: "absolute",
+    borderRadius: 999,
+    opacity: 0.15,
+  },
+  orb1: {
+    width: 300,
+    height: 300,
+    backgroundColor: "#7c3aed",
+    top: -100,
+    right: -80,
+    blur: 100,
+  },
+  orb2: {
+    width: 250,
+    height: 250,
+    backgroundColor: "#3b82f6",
+    bottom: 100,
+    left: -100,
+  },
   container: {
     flex: 1,
   },
-
   scrollContent: {
-    padding: 16,
-    paddingTop: 60, // 🔥 ADD THIS (push content down)
-    paddingBottom: 100,
+    padding: 20,
+    paddingTop: 60,
+    paddingBottom: 220,
   },
 
+  // Header
   header: {
-    marginBottom: 24,
-    marginTop: 10,
+    marginBottom: 32,
+    alignItems: "center",
   },
-
-  title: {
-    color: "#ffffff",
-    fontSize: 22,
-    fontWeight: "700",
-  },
-
-  subtitle: {
-    color: "#9ca3af",
-    fontSize: 13,
-    marginTop: 6,
-  },
-
-  card: {
-    backgroundColor: "rgba(17,24,39,0.85)",
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 14,
+  headerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(139, 92, 246, 0.1)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(139, 92, 246, 0.2)",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 16,
+    gap: 6,
+  },
+  headerBadgeText: {
+    color: "#a78bfa",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  title: {
+    color: "#f8fafc",
+    fontSize: 28,
+    fontWeight: "800",
+    textAlign: "center",
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    color: "#64748b",
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 22,
+    maxWidth: width * 0.8,
   },
 
+  // Cards
+  card: {
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    borderRadius: 20,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: "rgba(148, 163, 184, 0.08)",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
   cardSelected: {
-    borderColor: "#7c3aed",
-    shadowColor: "#7c3aed",
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
+    backgroundColor: "rgba(15, 23, 42, 0.8)",
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 12,
   },
-
+  cardPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  selectedIndicator: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+  },
+  cardContent: {
+    padding: 20,
+  },
   cardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  planIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 14,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  planName: {
+    color: "#e2e8f0",
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  planNameSelected: {
+    color: "#f8fafc",
+  },
+  tag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  tagText: {
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  planDuration: {
+    color: "#64748b",
+    fontSize: 13,
+    marginTop: 4,
+    fontWeight: "500",
+  },
+  priceContainer: {
+    alignItems: "flex-end",
+  },
+  priceSymbol: {
+    color: "#64748b",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  price: {
+    color: "#f8fafc",
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  priceSelected: {
+    color: "#fff",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(148, 163, 184, 0.08)",
+    marginVertical: 16,
+  },
+  featuresRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  featureChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 5,
+  },
+  featureText: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  monthlyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 14,
+    gap: 5,
+  },
+  monthlyText: {
+    color: "#475569",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  checkmarkContainer: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+  },
+  checkmarkGradient: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
     alignItems: "center",
   },
 
-  planName: {
-    color: "#ffffff",
+  // Empty State
+  emptyState: {
+    alignItems: "center",
+    marginTop: 60,
+    gap: 12,
+  },
+  emptyText: {
+    color: "#475569",
     fontSize: 16,
     fontWeight: "600",
   },
-
-  planDuration: {
-    color: "#9ca3af",
-    fontSize: 12,
-    marginTop: 4,
+  emptySubtext: {
+    color: "#334155",
+    fontSize: 13,
   },
 
-  price: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-
-  selectedBar: {
-    marginTop: 12,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: "#7c3aed",
-  },
-
-  emptyText: {
-    color: "#9ca3af",
-    textAlign: "center",
-    marginTop: 40,
-  },
-
-  footer: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.05)",
-    backgroundColor: "rgba(2,6,23,0.95)",
-  },
-
-  descriptionBox: {
-    backgroundColor: "rgba(17,24,39,0.85)",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-
-  descriptionTitle: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-
-  descriptionText: {
-    color: "#9ca3af",
-    fontSize: 12,
-    lineHeight: 18,
-  },
-
-  button: {
-    backgroundColor: "#7c3aed",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  buttonDisabled: {
-    backgroundColor: "#374151",
-  },
-
-  buttonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
+  // Preview Section
   previewSection: {
-    marginTop: 30,
-    marginBottom: 20,
+    marginTop: 24,
   },
-
+  previewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    gap: 12,
+  },
+  previewLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "rgba(148, 163, 184, 0.1)",
+  },
+  previewLabel: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
   previewCard: {
-    minHeight: 140,
-    paddingHorizontal: 4, // 🔥 keep spacing but no box feel
-    paddingVertical: 8,
-
-    backgroundColor: "transparent", // 🔥 key change
-    borderWidth: 0,
-
-    shadowOpacity: 0, // 🔥 remove glow
-    elevation: 0,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.08)",
+    overflow: "hidden",
+    flexDirection: "row",
+  },
+  previewAccent: {
+    width: 4,
+  },
+  previewContent: {
+    flex: 1,
+    padding: 20,
   },
   previewTitle: {
-    color: "#ffffff",
-    fontSize: 16,
+    color: "#f8fafc",
+    fontSize: 18,
     fontWeight: "700",
-    marginBottom: 10,
+    marginBottom: 8,
+  },
+  previewDescription: {
+    color: "#94a3b8",
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  benefitsGrid: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(148, 163, 184, 0.08)",
+  },
+  benefitItem: {
+    alignItems: "center",
+    gap: 6,
+  },
+  benefitIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  benefitValue: {
+    color: "#f8fafc",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  benefitLabel: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: "600",
   },
 
-  previewText: {
-    color: "#cbd5f5",
-    fontSize: 13,
-    lineHeight: 20,
+  // Footer
+  footer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+    paddingBottom: 32,
+    backgroundColor: "rgba(2, 6, 23, 0.95)",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(148, 163, 184, 0.06)",
+  },
+  footerSummary: {
+    marginBottom: 12,
+  },
+  footerSummaryLeft: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  footerPlanName: {
+    color: "#94a3b8",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  footerPlanPrice: {
+    color: "#f8fafc",
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  footerDivider: {
+    height: 1,
+    backgroundColor: "rgba(148, 163, 184, 0.08)",
+  },
+  button: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#7c3aed",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  buttonDisabled: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+  buttonGradient: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 16,
+    gap: 8,
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  buttonIcon: {
+    marginLeft: 4,
   },
 });
