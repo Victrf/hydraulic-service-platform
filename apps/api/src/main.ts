@@ -10,10 +10,14 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ✅ FIX: Serve uploads from correct root folder
-  app.use('/uploads', express.static(join(process.cwd(), 'src/uploads')));
+  // Serve images from apps/api/src/uploads/
+  // Includes products, companies, users, and service-requests.
+  app.use('/uploads', express.static(join(process.cwd(), 'src', 'uploads')));
 
-  // ✅ GLOBAL VALIDATION
+  // Preserve existing images from apps/api/uploads/.
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+
+  // GLOBAL VALIDATION
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -22,7 +26,7 @@ async function bootstrap() {
     }),
   );
 
-  // ✅ SWAGGER SETUP
+  // SWAGGER SETUP
   const config = new DocumentBuilder()
     .setTitle('Hydraulic Service API')
     .setDescription('API for equipment maintenance and technician dispatch')
@@ -33,11 +37,13 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
-  // ✅ START SERVER
+  // START SERVER
   await app.listen(3000);
 
   console.log('🚀 API running on http://localhost:3000');
-  console.log('📂 Static uploads served from /uploads');
+  console.log(
+    '📂 Static uploads served from apps/api/src/uploads and apps/api/uploads',
+  );
 }
 
 void bootstrap();
