@@ -6,12 +6,25 @@ import { ValidationPipe } from '@nestjs/common';
 
 import * as express from 'express';
 import { join } from 'path';
+import { mkdirSync } from 'fs';
+
+const uploadDirectories = [
+  join(process.cwd(), 'src', 'uploads', 'users'),
+  join(process.cwd(), 'src', 'uploads', 'products'),
+  join(process.cwd(), 'src', 'uploads', 'companies'),
+  join(process.cwd(), 'src', 'uploads', 'maintenance-findings'),
+  join(process.cwd(), 'uploads', 'service-requests'),
+];
 
 async function bootstrap() {
+  // Ensure upload directories exist before handling requests.
+  for (const directory of uploadDirectories) {
+    mkdirSync(directory, { recursive: true });
+  }
+
   const app = await NestFactory.create(AppModule);
 
-  // Serve images from apps/api/src/uploads/
-  // Includes products, companies, users, and service-requests.
+  // Serve images from apps/api/src/uploads/.
   app.use('/uploads', express.static(join(process.cwd(), 'src', 'uploads')));
 
   // Preserve existing images from apps/api/uploads/.
@@ -41,10 +54,8 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
 
-  console.log('🚀 API running on http://localhost:3000');
-  console.log(
-    '📂 Static uploads served from apps/api/src/uploads and apps/api/uploads',
-  );
+  console.log(`API running on port ${port}`);
+  console.log('Upload directories checked and created.');
 }
 
 void bootstrap();
